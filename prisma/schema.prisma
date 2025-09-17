@@ -101,6 +101,11 @@ model Device {
   userDevices       UserDevice[]
   verificationItems VerificationItem[]
 
+  @@index([categoryId])
+  @@index([brand])
+  @@index([widthCm, heightCm, depthCm])
+  @@index([powerWatts])
+  @@index([verified])
   @@map("devices")
 }
 
@@ -118,6 +123,8 @@ model DeviceStandard {
   device   Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   standard Standard @relation(fields: [standardId], references: [id])
 
+  @@index([deviceId])
+  @@index([standardId])
   @@map("device_standards")
 }
 
@@ -152,6 +159,7 @@ model UserDevice {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   device Device @relation(fields: [deviceId], references: [id])
 
+  @@index([userId])
   @@map("user_devices")
 }
 
