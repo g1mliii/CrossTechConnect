@@ -1,0 +1,191 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users and Authentication
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String   @map("password_hash")
+  displayName      String?  @map("display_name") @db.VarChar(100)
+  reputationScore  Int      @default(0) @map("reputation_score")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userDevices       UserDevice[]
+  createdDevices    Device[]
+  verificationVotes VerificationVote[]
+
+  @@map("users")
+}
+
+// Device Categories
+model DeviceCategory {
+  id         String            @id @default(cuid())
+  name       String            @db.VarChar(100)
+  parentId   String?           @map("parent_id")
+  attributes Json?             // Category-specific attributes
+  
+  // Relations
+  parent     DeviceCategory?   @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children   DeviceCategory[]  @relation("CategoryHierarchy")
+  devices    Device[]
+
+  @@map("device_categories")
+}
+
+// Technical Standards
+model Standard {
+  id             String   @id @default(cuid())
+  name           String   @db.VarChar(100) // e.g., "HDMI 2.1", "USB-C PD"
+  category       String   @db.VarChar(50)  // e.g., "video", "power", "data"
+  version        String?  @db.VarChar(20)
+  specifications Json?    // Technical specs like bandwidth, power delivery
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  deviceStandards     DeviceStandard[]
+  compatibilityRulesA CompatibilityRule[] @relation("StandardA")
+  compatibilityRulesB CompatibilityRule[] @relation("StandardB")
+
+  @@map("standards")
+}
+
+// Main Device Catalog
+model Device {
+  id                String    @id @default(cuid())
+  name              String    @db.VarChar(255)
+  brand             String    @db.VarChar(100)
+  model             String?   @db.VarChar(100)
+  categoryId        String    @map("category_id")
+  
+  // Physical Specifications
+  widthCm           Decimal?  @map("width_cm") @db.Decimal(6,2)
+  heightCm          Decimal?  @map("height_cm") @db.Decimal(6,2)
+  depthCm           Decimal?  @map("depth_cm") @db.Decimal(6,2)
+  weightKg          Decimal?  @map("weight_kg") @db.Decimal(6,3)
+  
+  // Power and Performance
+  powerWatts        Int?      @map("power_watts")
+  powerType         String?   @map("power_type") @db.VarChar(50) // AC, DC, Battery, etc.
+  
+  // Documentation
+  manualUrl         String?   @map("manual_url")
+  imageUrls         String[]  @map("image_urls")
+  description       String?
+  
+  // Data Quality
+  verified          Boolean   @default(false)
+  confidenceScore   Decimal   @default(0.0) @map("confidence_score") @db.Decimal(3,2)
+  sourceUrl         String?   @map("source_url")
+  extractionMethod  String?   @map("extraction_method") @db.VarChar(50) // manual, ai_pdf, ai_scrape, crowdsource
+  
+  // Metadata
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  createdById       String?   @map("created_by")
+
+  // Relations
+  category          DeviceCategory    @relation(fields: [categoryId], references: [id])
+  createdBy         User?             @relation(fields: [createdById], references: [id])
+  deviceStandards   DeviceStandard[]
+  userDevices       UserDevice[]
+  verificationItems VerificationItem[]
+
+  @@map("devices")
+}
+
+// Device-Standards Relationships
+model DeviceStandard {
+  id         String   @id @default(cuid())
+  deviceId   String   @map("device_id")
+  standardId String   @map("standard_id")
+  portCount  Int      @default(1) @map("port_count")
+  notes      String?
+  verified   Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  device   Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  standard Standard @relation(fields: [standardId], references: [id])
+
+  @@map("device_standards")
+}
+
+// Compatibility Rules
+model CompatibilityRule {
+  id                 String   @id @default(cuid())
+  standardAId        String   @map("standard_a_id")
+  standardBId        String   @map("standard_b_id")
+  compatibilityType  String   @map("compatibility_type") @db.VarChar(20) // full, partial, none
+  description        String?
+  limitations        String[] 
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  // Relations
+  standardA Standard @relation("StandardA", fields: [standardAId], references: [id])
+  standardB Standard @relation("StandardB", fields: [standardBId], references: [id])
+
+  @@map("compatibility_rules")
+}
+
+// User Device Libraries
+model UserDevice {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  deviceId     String    @map("device_id")
+  nickname     String?   @db.VarChar(100)
+  notes        String?
+  purchaseDate DateTime? @map("purchase_date") @db.Date
+  addedAt      DateTime  @default(now()) @map("added_at")
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id])
+
+  @@map("user_devices")
+}
+
+// Verification Queue and History
+model VerificationItem {
+  id              String   @id @default(cuid())
+  deviceId        String   @map("device_id")
+  fieldName       String   @map("field_name") @db.VarChar(100)
+  currentValue    String?  @map("current_value")
+  proposedValue   String?  @map("proposed_value")
+  sourceType      String?  @map("source_type") @db.VarChar(50) // ai_extraction, user_submission
+  confidenceScore Decimal? @map("confidence_score") @db.Decimal(3,2)
+  status          String   @default("pending") @db.VarChar(20) // pending, approved, rejected
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  device            Device             @relation(fields: [deviceId], references: [id])
+  verificationVotes VerificationVote[]
+
+  @@map("verification_items")
+}
+
+model VerificationVote {
+  id                   String   @id @default(cuid())
+  verificationItemId   String   @map("verification_item_id")
+  userId               String   @map("user_id")
+  vote                 String   @db.VarChar(10) // approve, reject, modify
+  suggestedValue       String?  @map("suggested_value")
+  comment              String?
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  // Relations
+  verificationItem VerificationItem @relation(fields: [verificationItemId], references: [id])
+  user             User             @relation(fields: [userId], references: [id])
+
+  @@map("verification_votes")
+}
