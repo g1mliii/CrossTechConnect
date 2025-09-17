@@ -21,9 +21,10 @@ model User {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   // Relations
-  userDevices       UserDevice[]
-  createdDevices    Device[]
-  verificationVotes VerificationVote[]
+  userDevices         UserDevice[]
+  createdDevices      Device[]
+  verificationVotes   VerificationVote[]
+  createdSchemas      DeviceCategorySchema[]
 
   @@map("users")
 }
@@ -36,9 +37,13 @@ model DeviceCategory {
   attributes Json?             // Category-specific attributes
   
   // Relations
-  parent     DeviceCategory?   @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children   DeviceCategory[]  @relation("CategoryHierarchy")
-  devices    Device[]
+  parent              DeviceCategory?        @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children            DeviceCategory[]       @relation("CategoryHierarchy")
+  devices             Device[]
+  schemas             DeviceCategorySchema[]
+  deviceSpecifications DeviceSpecification[]
+  schemaMigrations    SchemaMigration[]
+  dynamicIndexes      DynamicIndex[]
 
   @@map("device_categories")
 }
@@ -95,11 +100,14 @@ model Device {
   createdById       String?   @map("created_by")
 
   // Relations
-  category          DeviceCategory    @relation(fields: [categoryId], references: [id])
-  createdBy         User?             @relation(fields: [createdById], references: [id])
-  deviceStandards   DeviceStandard[]
-  userDevices       UserDevice[]
-  verificationItems VerificationItem[]
+  category              DeviceCategory       @relation(fields: [categoryId], references: [id])
+  createdBy             User?                @relation(fields: [createdById], references: [id])
+  deviceStandards       DeviceStandard[]
+  userDevices           UserDevice[]
+  verificationItems     VerificationItem[]
+  deviceSpecification   DeviceSpecification?
+  sourceCompatibilities CompatibilityResult[] @relation("SourceCompatibility")
+  targetCompatibilities CompatibilityResult[] @relation("TargetCompatibility")
 
   @@index([categoryId])
   @@index([brand])
@@ -196,4 +204,153 @@ model VerificationVote {
   user             User             @relation(fields: [userId], references: [id])
 
   @@map("verification_votes")
+}
+
+// Extensible Schema System Models
+
+// Device Category Schemas - Defines the structure and validation rules for device categories
+model DeviceCategorySchema {
+  id                  String   @id @default(cuid())
+  categoryId          String   @map("category_id")
+  version             String   @db.VarChar(20)
+  name                String   @db.VarChar(100)
+  description         String?
+  parentId            String?  @map("parent_id")
+  fields              Json     // Field definitions with types, constraints, and metadata
+  requiredFields      String[] @map("required_fields")
+  inheritedFields     String[] @map("inherited_fields")
+  computedFields      Json?    @map("computed_fields")
+  validationRules     Json?    @map("validation_rules")
+  compatibilityRules  Json?    @map("compatibility_rules")
+  deprecated          Boolean  @default(false)
+  deprecationMessage  String?  @map("deprecation_message")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  createdBy           String   @map("created_by")
+
+  // Relations
+  category            DeviceCategory        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  parent              DeviceCategorySchema? @relation("SchemaInheritance", fields: [parentId], references: [id])
+  children            DeviceCategorySchema[] @relation("SchemaInheritance")
+  creator             User                  @relation(fields: [createdBy], references: [id])
+  deviceSpecifications DeviceSpecification[]
+  schemaMigrations    SchemaMigration[]
+
+  @@unique([categoryId, version])
+  @@index([categoryId])
+  @@index([version])
+  @@index([parentId])
+  @@map("device_category_schemas")
+}
+
+// Device Specifications - Stores actual device specification data according to schema
+model DeviceSpecification {
+  id                   String   @id @default(cuid())
+  deviceId             String   @unique @map("device_id")
+  categoryId           String   @map("category_id")
+  schemaVersion        String   @map("schema_version") @db.VarChar(20)
+  specifications       Json     // Actual specification values
+  computedValues       Json?    @map("computed_values")
+  validationErrors     Json?    @map("validation_errors")
+  confidenceScores     Json?    @map("confidence_scores")
+  sources              Json?    // Source URLs/references for each field
+  verificationStatus   Json?    @map("verification_status")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  device               Device               @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  category             DeviceCategory       @relation(fields: [categoryId], references: [id])
+  schema               DeviceCategorySchema @relation(fields: [categoryId, schemaVersion], references: [categoryId, version])
+
+  @@index([deviceId])
+  @@index([categoryId])
+  @@index([schemaVersion])
+  @@map("device_specifications")
+}
+
+// Schema Migrations - Tracks changes between schema versions
+model SchemaMigration {
+  id          String    @id @default(cuid())
+  categoryId  String    @map("category_id")
+  fromVersion String    @map("from_version") @db.VarChar(20)
+  toVersion   String    @map("to_version") @db.VarChar(20)
+  operations  Json      // Migration operations to apply
+  createdAt   DateTime  @default(now()) @map("created_at")
+  appliedAt   DateTime? @map("applied_at")
+
+  // Relations
+  category    DeviceCategory       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  schema      DeviceCategorySchema @relation(fields: [categoryId, toVersion], references: [categoryId, version])
+
+  @@index([categoryId])
+  @@index([fromVersion])
+  @@index([toVersion])
+  @@map("schema_migrations")
+}
+
+// Category Templates - Predefined templates for creating new device categories
+model CategoryTemplate {
+  id             String   @id @default(cuid())
+  name           String   @db.VarChar(100)
+  description    String
+  baseSchema     Json     @map("base_schema")
+  exampleDevices String[] @map("example_devices")
+  tags           String[]
+  popularity     Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([tags], type: Gin)
+  @@index([popularity])
+  @@map("category_templates")
+}
+
+// Dynamic Indexes - Tracks dynamically created database indexes for schema fields
+model DynamicIndex {
+  id               String   @id @default(cuid())
+  categoryId       String   @map("category_id")
+  fieldName        String   @map("field_name") @db.VarChar(100)
+  indexType        String   @map("index_type") @db.VarChar(20) // btree, gin, gist, hash
+  indexName        String   @map("index_name") @db.VarChar(100)
+  uniqueConstraint Boolean  @default(false) @map("unique_constraint")
+  partialCondition String?  @map("partial_condition")
+  expression       String?  // For expression indexes
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  // Relations
+  category         DeviceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, fieldName])
+  @@index([categoryId])
+  @@index([fieldName])
+  @@map("dynamic_indexes")
+}
+
+// Compatibility Results - Cached compatibility analysis results
+model CompatibilityResult {
+  id                   String    @id @default(cuid())
+  sourceDeviceId       String    @map("source_device_id")
+  targetDeviceId       String    @map("target_device_id")
+  compatibilityType    String    @map("compatibility_type") @db.VarChar(20) // full, partial, none
+  confidence           Decimal   @db.Decimal(3,2)
+  details              String
+  limitations          String[]
+  recommendations      String[]
+  matchedRules         String[]  @map("matched_rules")
+  fieldCompatibility   Json?     @map("field_compatibility")
+  context              Json?     // Additional context used for compatibility check
+  createdAt            DateTime  @default(now()) @map("created_at")
+  expiresAt            DateTime? @map("expires_at")
+
+  // Relations
+  sourceDevice         Device    @relation("SourceCompatibility", fields: [sourceDeviceId], references: [id], onDelete: Cascade)
+  targetDevice         Device    @relation("TargetCompatibility", fields: [targetDeviceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceDeviceId, targetDeviceId])
+  @@index([sourceDeviceId])
+  @@index([targetDeviceId])
+  @@index([compatibilityType])
+  @@index([expiresAt])
+  @@map("compatibility_results")
 }
