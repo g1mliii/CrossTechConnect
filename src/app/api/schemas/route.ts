@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { schemaRegistry } from '@/lib/schema/registry';
 import { templateManager } from '@/lib/schema/templates';
-import { handlePrismaError } from '@/lib/database';
+// Removed Prisma dependency
 
 /**
  * GET /api/schemas - Get all schemas or filter by query parameters
@@ -99,6 +99,13 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error creating schema:', error);
-    handlePrismaError(error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Failed to create schema',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
   }
 }

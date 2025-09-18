@@ -12,7 +12,7 @@ import {
     CompatibilityRuleDefinition,
     MigrationOperation
 } from './types';
-import { prisma } from '../database';
+import { supabaseAdmin } from '../supabase-admin';
 // Import will be available after files are created
 // import { SchemaValidator } from './validator';
 // import { SchemaVersionManager } from './versioning';
@@ -252,18 +252,26 @@ export class DeviceSchemaRegistry implements SchemaRegistry {
      */
 
     private async loadSchemasFromDatabase(): Promise<void> {
-        // Load from device_category_schemas table (to be created)
-        // For now, load basic categories and convert to schemas
-        const categories = await prisma.deviceCategory.findMany({
-            include: {
-                parent: true,
-                children: true
-            }
-        });
+        try {
+            // Load from device_categories table using Supabase
+            const { data: categories, error } = await supabaseAdmin
+                .from('device_categories')
+                .select('*');
 
-        for (const category of categories) {
-            const schema = await this.convertCategoryToSchema(category);
-            this.schemas.set(schema.id, schema);
+            if (error) {
+                console.error('Error loading categories from Supabase:', error);
+                return;
+            }
+
+            if (categories) {
+                for (const category of categories) {
+                    const schema = await this.convertCategoryToSchema(category);
+                    this.schemas.set(schema.id, schema);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load schemas from database:', error);
+            // Continue with empty schemas rather than failing completely
         }
     }
 
@@ -280,7 +288,7 @@ export class DeviceSchemaRegistry implements SchemaRegistry {
             id: category.id,
             name: category.name,
             version: '1.0.0',
-            parentId: category.parentId,
+            parentId: category.parent_id, // Supabase uses snake_case
             description: `Schema for ${category.name} devices`,
             fields: baseFields,
             requiredFields: ['name', 'brand'],
@@ -354,28 +362,28 @@ export class DeviceSchemaRegistry implements SchemaRegistry {
     }
 
     private async saveSchemaToDatabase(schema: CategorySchema): Promise<void> {
-        // Save to device_category_schemas table (to be created in migration)
-        // For now, update the existing category
-        await prisma.deviceCategory.upsert({
-            where: { id: schema.id },
-            create: {
-                id: schema.id,
-                name: schema.name,
-                parentId: schema.parentId,
-                attributes: JSON.parse(JSON.stringify({
-                    schema: schema,
-                    version: schema.version
-                }))
-            },
-            update: {
-                name: schema.name,
-                parentId: schema.parentId,
-                attributes: JSON.parse(JSON.stringify({
-                    schema: schema,
-                    version: schema.version
-                }))
+        try {
+            // Save to device_categories table using Supabase
+            const { error } = await supabaseAdmin
+                .from('device_categories')
+                .upsert({
+                    id: schema.id,
+                    name: schema.name,
+                    parent_id: schema.parentId,
+                    attributes: {
+                        schema: schema,
+                        version: schema.version
+                    }
+                });
+
+            if (error) {
+                console.error('Error saving schema to database:', error);
+                throw new Error(`Failed to save schema: ${error.message}`);
             }
-        });
+        } catch (error) {
+            console.error('Failed to save schema to database:', error);
+            throw error;
+        }
     }
 
     private async generateIndexesForSchema(schema: CategorySchema): Promise<void> {

@@ -120,3 +120,10 @@ node_modules/
 
 # stores vscode versions used for testing vscode extensions
 .vscode-test
+
+# Security and audit files
+npm-audit.json
+security-audit.log
+
+# Temporary security scan results
+.security/
