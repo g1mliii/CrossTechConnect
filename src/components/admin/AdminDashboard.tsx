@@ -50,42 +50,14 @@ export function AdminDashboard() {
 
   const fetchDashboardStats = async () => {
     try {
-      // TODO: Replace with actual API call
-      const mockStats: DashboardStats = {
-        totalCategories: 12,
-        totalDevices: 1247,
-        totalUsers: 89,
-        pendingVerifications: 23,
-        recentActivity: [
-          {
-            id: '1',
-            type: 'category_created',
-            description: 'New category "Smart Watches" created',
-            timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-            user: 'admin@example.com'
-          },
-          {
-            id: '2',
-            type: 'schema_updated',
-            description: 'Gaming Console schema updated to v1.2',
-            timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
-            user: 'admin@example.com'
-          },
-          {
-            id: '3',
-            type: 'device_added',
-            description: '15 new devices added via AI extraction',
-            timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000)
-          }
-        ],
-        systemHealth: {
-          status: 'healthy',
-          issues: [],
-          lastCheck: new Date()
-        }
-      };
+      const response = await fetch('/api/admin/dashboard');
+      const result = await response.json();
       
-      setStats(mockStats);
+      if (result.success) {
+        setStats(result.data);
+      } else {
+        console.error('Failed to fetch dashboard stats:', result.error);
+      }
     } catch (error) {
       console.error('Failed to fetch dashboard stats:', error);
     } finally {
@@ -198,7 +170,7 @@ export function AdminDashboard() {
         )}
         
         <p className="text-xs text-gray-500 mt-2">
-          Last checked: {stats.systemHealth.lastCheck.toLocaleTimeString()}
+          Last checked: {new Date(stats.systemHealth.lastCheck).toLocaleTimeString()}
         </p>
       </div>
 
@@ -217,7 +189,7 @@ export function AdminDashboard() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-900">{activity.description}</p>
                 <div className="flex items-center space-x-2 text-xs text-gray-500">
-                  <span>{activity.timestamp.toLocaleTimeString()}</span>
+                  <span>{new Date(activity.timestamp).toLocaleTimeString()}</span>
                   {activity.user && (
                     <>
                       <span>•</span>

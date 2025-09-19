@@ -19,9 +19,12 @@ import {
   Clock
 } from 'lucide-react';
 import Link from 'next/link';
-import { CategorySchema } from '@/lib/schema/types';
-
-interface CategoryWithStats extends CategorySchema {
+interface CategoryWithStats {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  deprecated: boolean;
   deviceCount: number;
   lastUsed: Date;
   status: 'active' | 'deprecated' | 'draft';
@@ -39,16 +42,19 @@ export function CategoryManagement() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/schemas');
+      const response = await fetch('/api/categories?includeDeviceCount=true');
       const data = await response.json();
       
       if (data.success) {
-        // TODO: Replace with actual API that includes stats
-        const categoriesWithStats: CategoryWithStats[] = data.data.map((category: CategorySchema) => ({
-          ...category,
-          deviceCount: Math.floor(Math.random() * 100),
-          lastUsed: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-          status: category.deprecated ? 'deprecated' : 'active'
+        const categoriesWithStats: CategoryWithStats[] = data.data.map((category: any) => ({
+          id: category.id,
+          name: category.name,
+          description: category.attributes?.description || 'No description',
+          version: '1.0', // Default version for categories
+          deprecated: false, // Categories don't have deprecated field yet
+          deviceCount: category.deviceCount || 0,
+          lastUsed: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000), // Mock for now
+          status: 'active' as const
         }));
         
         setCategories(categoriesWithStats);
@@ -210,7 +216,7 @@ export function CategoryManagement() {
                     v{category.version}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
-                    {category.lastUsed.toLocaleDateString()}
+                    {new Date(category.lastUsed).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end space-x-2">

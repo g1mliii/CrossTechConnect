@@ -65,22 +65,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             }
         };
 
-        // TODO: MOCK IMPLEMENTATION - Replace in future task
-        // DEPENDENCY: Requires deviceSpecification table in Prisma schema
-        // TASK: Database Schema Extensions - Add DeviceSpecification model
         // Include sample devices if requested
         if (includeDevices) {
-            const devices: any[] = []; 
-            // TODO: Uncomment when DeviceSpecification table exists:
-            // const devices = await prisma.device.findMany({
-            //   where: { categoryId: params.id },
-            //   take: 10, // Limit to 10 sample devices
-            //   include: {
-            //     deviceSpecification: true
-            //   }
-            // });
+            const devices = await prisma.device.findMany({
+              where: { categoryId: params.id },
+              take: 10, // Limit to 10 sample devices
+              include: {
+                deviceSpecification: true
+              }
+            });
 
-            exportData.sampleDevices = devices.map((device: any) => ({
+            exportData.sampleDevices = devices.map((device) => ({
                 id: device.id,
                 name: device.name,
                 brand: device.brand,
@@ -89,18 +84,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             }));
         }
 
-        // TODO: MOCK IMPLEMENTATION - Replace in future task
-        // DEPENDENCY: Requires schemaMigration table in Prisma schema
-        // TASK: Migration System Implementation - Add SchemaMigration model
         // Get migration history
-        const migrations: any[] = [];
-        // TODO: Uncomment when SchemaMigration table exists:
-        // const migrations = await prisma.schemaMigration.findMany({
-        //   where: { categoryId: params.id },
-        //   orderBy: { createdAt: 'asc' }
-        // });
+        const migrations = await prisma.schemaMigration.findMany({
+          where: { categoryId: params.id },
+          orderBy: { createdAt: 'asc' }
+        });
 
-        exportData.migrationHistory = migrations.map((migration: any) => ({
+        exportData.migrationHistory = migrations.map((migration) => ({
             id: migration.id,
             fromVersion: migration.fromVersion,
             toVersion: migration.toVersion,

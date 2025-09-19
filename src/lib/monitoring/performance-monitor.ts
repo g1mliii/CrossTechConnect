@@ -147,20 +147,20 @@ export class PerformanceMonitor {
       throw new Error(`Category not found: ${categoryId}`);
     }
 
-    // Get device count - mock for now since table structure is different
-    const deviceCount = 10; // await prisma.device.count({
-    //   where: { categoryId }
-    // });
+    // Get device count
+    const deviceCount = await prisma.device.count({
+      where: { categoryId }
+    });
 
-    // Get specification data - mock for now since table doesn't exist yet
-    const specifications: any[] = []; // await prisma.deviceSpecification.findMany({
-    //   where: { categoryId },
-    //   select: {
-    //     validationErrors: true,
-    //     confidenceScores: true,
-    //     verificationStatus: true
-    //   }
-    // });
+    // Get specification data
+    const specifications = await prisma.deviceSpecification.findMany({
+      where: { categoryId },
+      select: {
+        validationErrors: true,
+        confidenceScores: true,
+        verificationStatus: true
+      }
+    });
 
     // Calculate validation metrics
     const totalValidationErrors = specifications.reduce((sum: number, spec: any) => {
@@ -221,17 +221,18 @@ export class PerformanceMonitor {
    * Get index usage metrics
    */
   private async getIndexUsage(categoryId: string): Promise<IndexUsageMetric[]> {
-    // Mock for now since table doesn't exist yet
-    const indexes: any[] = []; // await prisma.dynamicIndex.findMany({
-    //   where: { categoryId }
-    // });
+    const indexes = await prisma.dynamicIndex.findMany({
+      where: { categoryId }
+    });
 
-    return indexes.map((index: any) => ({
+    // In a real implementation, we would query PostgreSQL's pg_stat_user_indexes
+    // For now, we'll use the index data with some calculated metrics
+    return indexes.map((index) => ({
       indexName: index.indexName,
       fieldName: index.fieldName,
-      usageCount: Math.floor(Math.random() * 100) + 10,
-      avgQueryTime: Math.random() * 50 + 10,
-      effectiveness: Math.random() * 0.5 + 0.5 // 0.5-1.0
+      usageCount: Math.floor(Math.random() * 100) + 10, // TODO: Get from pg_stat_user_indexes
+      avgQueryTime: Math.random() * 50 + 10, // TODO: Get from query performance logs
+      effectiveness: Math.random() * 0.5 + 0.5 // TODO: Calculate based on actual usage
     }));
   }
 
@@ -239,16 +240,36 @@ export class PerformanceMonitor {
    * Find missing indexes that could improve performance
    */
   private async findMissingIndexes(categoryId: string): Promise<string[]> {
-    // This would analyze query patterns and suggest missing indexes
-    // For now, return mock data
-    const commonSearchFields = ['name', 'brand', 'model'];
-    const existingIndexes: any[] = []; // await prisma.dynamicIndex.findMany({
-    //   where: { categoryId },
-    //   select: { fieldName: true }
-    // });
+    // Get existing dynamic indexes
+    const existingIndexes = await prisma.dynamicIndex.findMany({
+      where: { categoryId },
+      select: { fieldName: true }
+    });
 
-    const existingFields = new Set(existingIndexes.map((i: any) => i.fieldName));
-    return commonSearchFields.filter(field => !existingFields.has(field));
+    // Get commonly searched fields from device specifications
+    const specifications = await prisma.deviceSpecification.findMany({
+      where: { categoryId },
+      select: { specifications: true },
+      take: 100 // Sample to analyze common fields
+    });
+
+    // Analyze which fields are commonly used
+    const fieldFrequency = new Map<string, number>();
+    specifications.forEach(spec => {
+      const specData = spec.specifications as Record<string, any>;
+      Object.keys(specData).forEach(field => {
+        fieldFrequency.set(field, (fieldFrequency.get(field) || 0) + 1);
+      });
+    });
+
+    // Find frequently used fields that don't have indexes
+    const existingFields = new Set(existingIndexes.map(i => i.fieldName));
+    const commonFields = Array.from(fieldFrequency.entries())
+      .filter(([_, count]) => count > specifications.length * 0.1) // Used in >10% of devices
+      .map(([field, _]) => field)
+      .filter(field => !existingFields.has(field));
+
+    return commonFields;
   }
 
   /**

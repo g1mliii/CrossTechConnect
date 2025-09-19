@@ -22,21 +22,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Try to get from built-in templates first
     template = templateManager.getTemplate(params.id);
 
-    // If not found, try database - mock for now since table doesn't exist yet
+    // If not found, try database
     if (!template) {
-      const dbTemplate = null; // await prisma.categoryTemplate.findUnique({
-      //   where: { id: params.id }
-      // });
+      const dbTemplate = await prisma.categoryTemplate.findUnique({
+        where: { id: params.id }
+      });
 
       if (dbTemplate) {
         template = {
-          id: (dbTemplate as any).id,
-          name: (dbTemplate as any).name,
-          description: (dbTemplate as any).description,
-          baseSchema: (dbTemplate as any).baseSchema as any,
-          exampleDevices: (dbTemplate as any).exampleDevices,
-          tags: (dbTemplate as any).tags,
-          popularity: (dbTemplate as any).popularity
+          id: dbTemplate.id,
+          name: dbTemplate.name,
+          description: dbTemplate.description,
+          baseSchema: dbTemplate.baseSchema as any,
+          exampleDevices: dbTemplate.exampleDevices,
+          tags: dbTemplate.tags,
+          popularity: dbTemplate.popularity
         };
       }
     }

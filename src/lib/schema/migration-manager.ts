@@ -27,26 +27,15 @@ export class MigrationManager {
       throw new Error(`Category not found: ${categoryId}`);
     }
 
-    // Create migration record - mock for now since table doesn't exist yet
-    const migration = {
-      id: `migration-${Date.now()}`,
-      categoryId,
-      fromVersion,
-      toVersion,
-      operations: JSON.parse(JSON.stringify(operations)),
-      createdAt: new Date(),
-      appliedAt: null
-    };
-    
-    // TODO: Uncomment when schema migration table is created
-    // const migration = await prisma.schemaMigration.create({
-    //   data: {
-    //     categoryId,
-    //     fromVersion,
-    //     toVersion,
-    //     operations: JSON.parse(JSON.stringify(operations))
-    //   }
-    // });
+    // Create migration record
+    const migration = await prisma.schemaMigration.create({
+      data: {
+        categoryId,
+        fromVersion,
+        toVersion,
+        operations: JSON.parse(JSON.stringify(operations))
+      }
+    });
 
     return {
       id: migration.id,
@@ -67,25 +56,13 @@ export class MigrationManager {
     affectedDevices: number;
     generatedIndexes: string[];
   }> {
-    // Mock migration record for now since table doesn't exist yet
-    const migrationRecord = {
-      id: migrationId,
-      categoryId: 'test-category',
-      fromVersion: '1.0.0',
-      toVersion: '1.1.0',
-      operations: [],
-      createdAt: new Date(),
-      appliedAt: null,
-      category: { name: 'Test Category' }
-    };
-
-    // TODO: Uncomment when schema migration table is created
-    // const migrationRecord = await prisma.schemaMigration.findUnique({
-    //   where: { id: migrationId },
-    //   include: {
-    //     category: true
-    //   }
-    // });
+    // Get migration record from database
+    const migrationRecord = await prisma.schemaMigration.findUnique({
+      where: { id: migrationId },
+      include: {
+        category: true
+      }
+    });
 
     if (!migrationRecord) {
       throw new Error(`Migration not found: ${migrationId}`);
@@ -102,12 +79,11 @@ export class MigrationManager {
       // Apply each operation
       const results = await this.applyOperations(categoryId, operations);
 
-      // Mark migration as applied - mock for now
-      // TODO: Uncomment when schema migration table is created
-      // await prisma.schemaMigration.update({
-      //   where: { id: migrationId },
-      //   data: { appliedAt: new Date() }
-      // });
+      // Mark migration as applied
+      await prisma.schemaMigration.update({
+        where: { id: migrationId },
+        data: { appliedAt: new Date() }
+      });
 
       // Update schema registry
       await schemaRegistry.initialize();
@@ -189,10 +165,10 @@ export class MigrationManager {
       }
     }
 
-    // Count affected devices - mock for now since table doesn't exist yet
-    affectedDevices = 0; // await prisma.deviceSpecification.count({
-    //   where: { categoryId }
-    // });
+    // Count affected devices
+    affectedDevices = await prisma.deviceSpecification.count({
+      where: { categoryId }
+    });
 
     return { affectedDevices, generatedIndexes };
   }
@@ -204,16 +180,14 @@ export class MigrationManager {
     // Update existing device specifications to include the new field with default value
     const defaultValue = this.getDefaultValueForType(definition.type);
     
-    // TODO: Uncomment when device specification table is created
-    // await prisma.deviceSpecification.updateMany({
-    //   where: { categoryId },
-    //   data: {
-    //     specifications: {
-    //       // This would need to be handled with raw SQL for JSON updates
-    //       // For now, we'll handle it in the application layer
-    //     }
-    //   }
-    // });
+    // Update existing device specifications to include the new field with default value
+    // Use raw SQL for JSON field updates
+    await prisma.$executeRaw`
+      UPDATE device_specifications 
+      SET specifications = specifications || ${JSON.stringify({ [fieldName]: defaultValue })}::jsonb
+      WHERE category_id = ${categoryId}
+      AND NOT (specifications ? ${fieldName})
+    `;
 
     console.log(`Added field ${fieldName} to category ${categoryId}`);
   }
@@ -222,8 +196,13 @@ export class MigrationManager {
    * Remove a field from category schema
    */
   private async removeField(categoryId: string, fieldName: string): Promise<void> {
-    // Remove field from all device specifications
-    // This would need raw SQL for JSON field removal
+    // Remove field from all device specifications using raw SQL
+    await prisma.$executeRaw`
+      UPDATE device_specifications 
+      SET specifications = specifications - ${fieldName}
+      WHERE category_id = ${categoryId}
+    `;
+    
     console.log(`Removed field ${fieldName} from category ${categoryId}`);
   }
 
@@ -232,6 +211,16 @@ export class MigrationManager {
    */
   private async modifyField(categoryId: string, fieldName: string, changes: any): Promise<void> {
     // Apply field modifications to existing specifications
+    // This would typically involve validation and type conversion
+    if (changes.defaultValue !== undefined) {
+      await prisma.$executeRaw`
+        UPDATE device_specifications 
+        SET specifications = jsonb_set(specifications, ${`{${fieldName}}`}, ${JSON.stringify(changes.defaultValue)}::jsonb)
+        WHERE category_id = ${categoryId}
+        AND (specifications->>${fieldName} IS NULL OR specifications->>${fieldName} = '')
+      `;
+    }
+    
     console.log(`Modified field ${fieldName} in category ${categoryId}:`, changes);
   }
 
@@ -239,7 +228,14 @@ export class MigrationManager {
    * Rename a field
    */
   private async renameField(categoryId: string, oldName: string, newName: string): Promise<void> {
-    // Rename field in all device specifications
+    // Rename field in all device specifications using raw SQL
+    await prisma.$executeRaw`
+      UPDATE device_specifications 
+      SET specifications = specifications - ${oldName} || jsonb_build_object(${newName}, specifications->${oldName})
+      WHERE category_id = ${categoryId}
+      AND specifications ? ${oldName}
+    `;
+    
     console.log(`Renamed field ${oldName} to ${newName} in category ${categoryId}`);
   }
 
@@ -282,20 +278,19 @@ export class MigrationManager {
     const indexName = `idx_${categoryId}_${fieldName}`.replace(/[^a-zA-Z0-9_]/g, '_');
     
     try {
-      // Create the index record - mock for now since table doesn't exist yet
-      // TODO: Uncomment when dynamic index table is created
-      // await prisma.dynamicIndex.create({
-      //   data: {
-      //     categoryId,
-      //     fieldName,
-      //     indexType: 'btree',
-      //     indexName,
-      //     uniqueConstraint: false
-      //   }
-      // });
+      // Create the index record
+      await prisma.dynamicIndex.create({
+        data: {
+          categoryId,
+          fieldName,
+          indexType: 'btree',
+          indexName,
+          uniqueConstraint: false
+        }
+      });
 
-      // Create actual database index (would need raw SQL)
-      // await prisma.$executeRaw`CREATE INDEX ${indexName} ON device_specifications USING btree ((specifications->>${fieldName}))`;
+      // Create actual database index using raw SQL
+      await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS ${indexName} ON device_specifications USING btree ((specifications->>${fieldName}))`;
       
       console.log(`Created index ${indexName} for field ${fieldName}`);
       return indexName;
@@ -310,24 +305,24 @@ export class MigrationManager {
    */
   private async removeDynamicIndex(categoryId: string, fieldName: string): Promise<void> {
     try {
-      // Mock for now since table doesn't exist yet
-      const index = null; // await prisma.dynamicIndex.findFirst({
-      //   where: {
-      //     categoryId,
-      //     fieldName
-      //   }
-      // });
+      // Find the index record
+      const index = await prisma.dynamicIndex.findFirst({
+        where: {
+          categoryId,
+          fieldName
+        }
+      });
 
       if (index) {
-        // Drop the database index (would need raw SQL)
-        // await prisma.$executeRaw`DROP INDEX IF EXISTS ${index.indexName}`;
+        // Drop the database index using raw SQL
+        await prisma.$executeRaw`DROP INDEX IF EXISTS ${index.indexName}`;
         
         // Remove the index record
-        // await prisma.dynamicIndex.delete({
-        //   where: { id: index.id }
-        // });
+        await prisma.dynamicIndex.delete({
+          where: { id: index.id }
+        });
 
-        console.log(`Removed index ${(index as any).indexName} for field ${fieldName}`);
+        console.log(`Removed index ${index.indexName} for field ${fieldName}`);
       }
     } catch (error) {
       console.error(`Failed to remove index for ${fieldName}:`, error);
@@ -357,18 +352,17 @@ export class MigrationManager {
    * Get pending migrations for a category
    */
   async getPendingMigrations(categoryId: string): Promise<SchemaMigration[]> {
-    // Mock for now since table doesn't exist yet
-    const migrations: any[] = []; // await prisma.schemaMigration.findMany({
-    //   where: {
-    //     categoryId,
-    //     appliedAt: null
-    //   },
-    //   orderBy: {
-    //     createdAt: 'asc'
-    //   }
-    // });
+    const migrations = await prisma.schemaMigration.findMany({
+      where: {
+        categoryId,
+        appliedAt: null
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    });
 
-    return migrations.map((m: any) => ({
+    return migrations.map((m) => ({
       id: m.id,
       categoryId: m.categoryId,
       fromVersion: m.fromVersion,

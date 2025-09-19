@@ -3,9 +3,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/database';
-import { MigrationManager } from '@/lib/schema/migration-manager';
-import { handlePrismaError } from '@/lib/database';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 /**
  * GET /api/admin/migrations - Get all migrations with status
@@ -16,34 +19,31 @@ export async function GET(request: NextRequest) {
     const categoryId = searchParams.get('categoryId');
     const status = searchParams.get('status'); // pending, applied, failed
 
-    const whereClause: any = {};
+    let query = supabase
+      .from('schema_migrations')
+      .select(`
+        *,
+        device_categories!inner(name)
+      `);
+
     if (categoryId) {
-      whereClause.categoryId = categoryId;
+      query = query.eq('category_id', categoryId);
     }
 
-    // Mock for now since table doesn't exist yet
-    const migrations: any[] = []; // await prisma.schemaMigration.findMany({
-    //   where: whereClause,
-    //   include: {
-    //     category: {
-    //       select: {
-    //         name: true
-    //       }
-    //     }
-    //   },
-    //   orderBy: {
-    //     createdAt: 'desc'
-    //   }
-    // });
+    const { data: migrations, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
 
     // Filter by status if provided
     const filteredMigrations = status 
-      ? migrations.filter((m: any) => {
-          if (status === 'applied') return m.appliedAt !== null;
-          if (status === 'pending') return m.appliedAt === null;
+      ? (migrations || []).filter((m: any) => {
+          if (status === 'applied') return m.applied_at !== null;
+          if (status === 'pending') return m.applied_at === null;
           return true;
         })
-      : migrations;
+      : migrations || [];
 
     return NextResponse.json({
       success: true,
@@ -72,19 +72,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { categoryId, fromVersion, toVersion, operations, autoApply = false } = body;
 
-    const migrationManager = new MigrationManager();
-    
     // Create the migration
-    const migration = await migrationManager.createMigration({
-      categoryId,
-      fromVersion,
-      toVersion,
-      operations
-    });
+    const { data: migration, error } = await supabase
+      .from('schema_migrations')
+      .insert({
+        category_id: categoryId,
+        from_version: fromVersion,
+        to_version: toVersion,
+        operations: operations,
+        applied_at: autoApply ? new Date().toISOString() : null
+      })
+      .select(`
+        *,
+        device_categories!inner(name)
+      `)
+      .single();
 
-    // Apply immediately if requested
-    if (autoApply) {
-      await migrationManager.applyMigration(migration.id);
+    if (error) {
+      throw error;
     }
 
     return NextResponse.json({
@@ -95,6 +100,13 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error creating migration:', error);
-    handlePrismaError(error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Failed to create migration',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
   }
 }

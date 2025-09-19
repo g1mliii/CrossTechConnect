@@ -3,17 +3,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { schemaRegistry } from '@/lib/schema/registry';
-import { templateManager } from '@/lib/schema/templates';
-// Removed Prisma dependency
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 /**
  * GET /api/schemas - Get all schemas or filter by query parameters
  */
 export async function GET(request: NextRequest) {
   try {
-    await schemaRegistry.initialize();
-    
     const { searchParams } = new URL(request.url);
     const parentId = searchParams.get('parentId');
     const deprecated = searchParams.get('deprecated');
@@ -21,23 +19,36 @@ export async function GET(request: NextRequest) {
 
     // If requesting templates
     if (template === 'true') {
-      const templates = templateManager.getAllTemplates();
+      const templates = await prisma.categoryTemplate.findMany({
+        orderBy: { popularity: 'desc' }
+      });
       return NextResponse.json({
         success: true,
         data: templates
       });
     }
 
-    // Filter parameters
-    const filter: any = {};
+    // Build filter for device category schemas
+    const where: any = {};
     if (parentId !== null) {
-      filter.parentId = parentId || undefined;
+      where.parentId = parentId || null;
     }
     if (deprecated !== null) {
-      filter.deprecated = deprecated === 'true';
+      where.deprecated = deprecated === 'true';
     }
 
-    const schemas = schemaRegistry.getAllSchemas(filter);
+    const schemas = await prisma.deviceCategorySchema.findMany({
+      where,
+      include: {
+        category: true,
+        parent: true,
+        children: true,
+        creator: {
+          select: { id: true, displayName: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
 
     return NextResponse.json({
       success: true,
@@ -55,6 +66,8 @@ export async function GET(request: NextRequest) {
       },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
@@ -63,8 +76,6 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    await schemaRegistry.initialize();
-    
     const body = await request.json();
     const { templateId, customizations, schema } = body;
 
@@ -72,7 +83,10 @@ export async function POST(request: NextRequest) {
 
     if (templateId) {
       // Create from template
-      const template = templateManager.getTemplate(templateId);
+      const template = await prisma.categoryTemplate.findUnique({
+        where: { id: templateId }
+      });
+      
       if (!template) {
         return NextResponse.json(
           { success: false, error: 'Template not found' },
@@ -80,11 +94,39 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      newSchema = await schemaRegistry.createCategoryFromTemplate(template, customizations);
+      // Create schema from template with customizations
+      newSchema = await prisma.deviceCategorySchema.create({
+        data: {
+          categoryId: customizations.categoryId,
+          version: customizations.version || '1.0',
+          name: customizations.name || template.name,
+          description: customizations.description || template.description,
+          fields: { 
+            ...(typeof template.baseSchema === 'object' ? template.baseSchema : {}), 
+            ...(customizations.fields || {}) 
+          },
+          requiredFields: customizations.requiredFields || [],
+          inheritedFields: customizations.inheritedFields || [],
+          createdBy: customizations.createdBy // Should come from auth
+        },
+        include: {
+          category: true,
+          creator: {
+            select: { id: true, displayName: true, email: true }
+          }
+        }
+      });
     } else if (schema) {
       // Create from full schema definition
-      await schemaRegistry.registerSchema(schema);
-      newSchema = schema;
+      newSchema = await prisma.deviceCategorySchema.create({
+        data: schema,
+        include: {
+          category: true,
+          creator: {
+            select: { id: true, displayName: true, email: true }
+          }
+        }
+      });
     } else {
       return NextResponse.json(
         { success: false, error: 'Either templateId or schema must be provided' },
@@ -107,5 +149,7 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 }

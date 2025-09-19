@@ -3,9 +3,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
-import { CategoryTemplate } from '@/lib/schema/types';
-import { templateManager } from '@/lib/schema/templates';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+interface CategoryTemplate {
+  id: string;
+  name: string;
+  description: string;
+  baseSchema: any;
+  exampleDevices: string[];
+  tags: string[];
+  popularity: number;
+}
 
 /**
  * GET /api/admin/templates - Get all templates
@@ -16,35 +29,35 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const tags = searchParams.get('tags')?.split(',').filter(Boolean);
 
-    let templates = templateManager.getAllTemplates();
-
-    // Apply search and tag filters
-    if (search || tags) {
-      templates = templateManager.searchTemplates(search || '', tags);
-    }
-
-    // Get custom templates from Supabase
-    const { data: customTemplates, error } = await supabaseAdmin
+    let query = supabase
       .from('category_templates')
-      .select('*')
-      .order('popularity', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching custom templates:', error);
+      .select('*');
+
+    // Apply search filter
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
     }
 
-    const allTemplates = [
-      ...templates,
-      ...(customTemplates || []).map((t: any) => ({
-        id: t.id,
-        name: t.name,
-        description: t.description,
-        baseSchema: t.base_schema as any,
-        exampleDevices: t.example_devices,
-        tags: t.tags,
-        popularity: t.popularity
-      }))
-    ];
+    // Apply tag filter
+    if (tags && tags.length > 0) {
+      query = query.overlaps('tags', tags);
+    }
+
+    const { data: templates, error } = await query.order('popularity', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    const allTemplates = (templates || []).map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      baseSchema: t.base_schema,
+      exampleDevices: t.example_devices,
+      tags: t.tags,
+      popularity: t.popularity
+    }));
 
     return NextResponse.json({
       success: true,
@@ -114,7 +127,7 @@ async function importTemplate(templateData: any): Promise<CategoryTemplate> {
   }
 
   // Check if template already exists
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await supabase
     .from('category_templates')
     .select('id')
     .eq('id', templateData.id)
@@ -125,13 +138,13 @@ async function importTemplate(templateData: any): Promise<CategoryTemplate> {
   }
 
   // Create template in database
-  const { data: template, error } = await supabaseAdmin
+  const { data: template, error } = await supabase
     .from('category_templates')
     .insert({
       id: templateData.id,
       name: templateData.name,
       description: templateData.description || '',
-      base_schema: JSON.parse(JSON.stringify(templateData.baseSchema)),
+      base_schema: templateData.baseSchema,
       example_devices: templateData.exampleDevices || [],
       tags: templateData.tags || [],
       popularity: templateData.popularity || 0
@@ -140,14 +153,14 @@ async function importTemplate(templateData: any): Promise<CategoryTemplate> {
     .single();
 
   if (error) {
-    throw new Error(`Failed to create template: ${error.message}`);
+    throw error;
   }
 
   return {
     id: template.id,
     name: template.name,
     description: template.description,
-    baseSchema: template.base_schema as any,
+    baseSchema: template.base_schema,
     exampleDevices: template.example_devices,
     tags: template.tags,
     popularity: template.popularity
@@ -163,13 +176,13 @@ async function createTemplate(templateData: Partial<CategoryTemplate>): Promise<
   }
 
   // Create template in database
-  const { data: template, error } = await supabaseAdmin
+  const { data: template, error } = await supabase
     .from('category_templates')
     .insert({
       id: templateData.id || `template-${Date.now()}`,
       name: templateData.name,
       description: templateData.description || '',
-      base_schema: JSON.parse(JSON.stringify(templateData.baseSchema)),
+      base_schema: templateData.baseSchema,
       example_devices: templateData.exampleDevices || [],
       tags: templateData.tags || [],
       popularity: 0
@@ -178,14 +191,14 @@ async function createTemplate(templateData: Partial<CategoryTemplate>): Promise<
     .single();
 
   if (error) {
-    throw new Error(`Failed to create template: ${error.message}`);
+    throw error;
   }
 
   return {
     id: template.id,
     name: template.name,
     description: template.description,
-    baseSchema: template.base_schema as any,
+    baseSchema: template.base_schema,
     exampleDevices: template.example_devices,
     tags: template.tags,
     popularity: template.popularity
