@@ -58,74 +58,14 @@ export function CategoryAnalytics() {
 
   const fetchAnalytics = async () => {
     try {
-      // TODO: Replace with actual API call
-      const mockData: AnalyticsData = {
-        totalCategories: 12,
-        totalDevices: 1247,
-        totalSearches: 8934,
-        avgCompatibilityScore: 0.87,
-        categoryStats: [
-          {
-            id: 'gaming-console',
-            name: 'Gaming Consoles',
-            deviceCount: 156,
-            searchCount: 2341,
-            userCount: 89,
-            avgCompatibilityScore: 0.92,
-            lastActivity: new Date(Date.now() - 2 * 60 * 60 * 1000),
-            trend: 'up',
-            trendPercentage: 12.5
-          },
-          {
-            id: 'monitor-display',
-            name: 'Monitors & Displays',
-            deviceCount: 234,
-            searchCount: 1876,
-            userCount: 67,
-            avgCompatibilityScore: 0.89,
-            lastActivity: new Date(Date.now() - 4 * 60 * 60 * 1000),
-            trend: 'up',
-            trendPercentage: 8.3
-          },
-          {
-            id: 'audio-device',
-            name: 'Audio Devices',
-            deviceCount: 189,
-            searchCount: 1654,
-            userCount: 54,
-            avgCompatibilityScore: 0.85,
-            lastActivity: new Date(Date.now() - 6 * 60 * 60 * 1000),
-            trend: 'stable',
-            trendPercentage: 0
-          },
-          {
-            id: 'smartphone',
-            name: 'Smartphones',
-            deviceCount: 298,
-            searchCount: 1432,
-            userCount: 78,
-            avgCompatibilityScore: 0.91,
-            lastActivity: new Date(Date.now() - 1 * 60 * 60 * 1000),
-            trend: 'down',
-            trendPercentage: -5.2
-          }
-        ],
-        timeSeriesData: Array.from({ length: 30 }, (_, i) => ({
-          date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          searches: Math.floor(Math.random() * 200) + 100,
-          devices: Math.floor(Math.random() * 20) + 5,
-          users: Math.floor(Math.random() * 50) + 20
-        })),
-        topCategories: [
-          { name: 'Gaming Consoles', value: 2341, percentage: 26.2 },
-          { name: 'Monitors & Displays', value: 1876, percentage: 21.0 },
-          { name: 'Audio Devices', value: 1654, percentage: 18.5 },
-          { name: 'Smartphones', value: 1432, percentage: 16.0 },
-          { name: 'Laptops', value: 1631, percentage: 18.3 }
-        ]
-      };
+      const response = await fetch(`/api/admin/analytics?timeRange=${timeRange}`);
+      const result = await response.json();
       
-      setAnalytics(mockData);
+      if (result.success) {
+        setAnalytics(result.data);
+      } else {
+        console.error('Failed to fetch analytics:', result.error);
+      }
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
     } finally {
@@ -315,7 +255,7 @@ export function CategoryAnalytics() {
                   <td className="px-6 py-4 text-sm text-gray-500">
                     <div className="flex items-center space-x-1">
                       <Clock className="w-4 h-4" />
-                      <span>{stat.lastActivity.toLocaleTimeString()}</span>
+                      <span>{new Date(stat.lastActivity).toLocaleTimeString()}</span>
                     </div>
                   </td>
                 </tr>

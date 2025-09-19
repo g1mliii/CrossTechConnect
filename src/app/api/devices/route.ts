@@ -32,15 +32,15 @@ export async function GET(request: NextRequest) {
           standards(id, name, category, version)
         )
       `);
-    
+
     if (categoryId) {
       query = query.eq('category_id', categoryId);
     }
-    
+
     if (verified !== null) {
       query = query.eq('verified', verified === 'true');
     }
-    
+
     if (search) {
       query = query.or(`name.ilike.%${search}%,brand.ilike.%${search}%,model.ilike.%${search}%`);
     }
@@ -77,8 +77,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching devices:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Failed to fetch devices',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
@@ -175,8 +175,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating device:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Failed to create device',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
