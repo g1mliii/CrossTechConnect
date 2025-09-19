@@ -1,74 +1,61 @@
 /**
- * API endpoint for exporting templates
+ * API endpoint for template export
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/database';
-import { templateManager } from '@/lib/schema/templates';
+import { createClient } from '@supabase/supabase-js';
 
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 /**
- * GET /api/admin/templates/[id]/export - Export a template as JSON
+ * GET /api/admin/templates/[id]/export - Export template as JSON
  */
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    let template;
+    const { id } = await params;
+    const { data: template, error } = await supabase
+      .from('category_templates')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    // Try to get from built-in templates first
-    template = templateManager.getTemplate(params.id);
-
-    // If not found, try database
-    if (!template) {
-      const dbTemplate = await prisma.categoryTemplate.findUnique({
-        where: { id: params.id }
-      });
-
-      if (dbTemplate) {
-        template = {
-          id: dbTemplate.id,
-          name: dbTemplate.name,
-          description: dbTemplate.description,
-          baseSchema: dbTemplate.baseSchema as any,
-          exampleDevices: dbTemplate.exampleDevices,
-          tags: dbTemplate.tags,
-          popularity: dbTemplate.popularity
-        };
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return NextResponse.json(
+          { success: false, error: 'Template not found' },
+          { status: 404 }
+        );
       }
+      throw error;
     }
 
-    if (!template) {
-      return NextResponse.json(
-        { success: false, error: 'Template not found' },
-        { status: 404 }
-      );
-    }
-
-    // Create export data with metadata
+    // Format template for export
     const exportData = {
-      ...template,
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      baseSchema: template.base_schema,
+      exampleDevices: template.example_devices,
+      tags: template.tags,
+      popularity: template.popularity,
       exportedAt: new Date().toISOString(),
-      exportVersion: '1.0.0',
-      metadata: {
-        source: 'device-compatibility-platform',
-        version: '1.0.0',
-        description: 'Device category template export'
-      }
+      version: '1.0'
     };
 
-    // Return as downloadable JSON
-    const response = new NextResponse(JSON.stringify(exportData, null, 2), {
+    // Return as downloadable JSON file
+    return new NextResponse(JSON.stringify(exportData, null, 2), {
+      status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="${template.id}-template.json"`
+        'Content-Disposition': `attachment; filename="template-${template.name.replace(/[^a-zA-Z0-9]/g, '-')}.json"`
       }
     });
-
-    return response;
 
   } catch (error) {
     console.error('Error exporting template:', error);

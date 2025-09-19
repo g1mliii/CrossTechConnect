@@ -72,6 +72,46 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { categoryId, fromVersion, toVersion, operations, autoApply = false } = body;
 
+    // First, check if the target schema version exists, if not create it
+    const { data: existingSchema } = await supabase
+      .from('device_category_schemas')
+      .select('id')
+      .eq('category_id', categoryId)
+      .eq('version', toVersion)
+      .single();
+
+    if (!existingSchema) {
+      // Create a basic schema for the target version
+      const { error: schemaError } = await supabase
+        .from('device_category_schemas')
+        .insert({
+          category_id: categoryId,
+          version: toVersion,
+          name: `Schema v${toVersion}`,
+          description: `Auto-generated schema for migration to version ${toVersion}`,
+          fields: {
+            type: 'object',
+            properties: {},
+            required: []
+          },
+          required_fields: [],
+          inherited_fields: [],
+          created_by: 'system-user-001'
+        });
+
+      if (schemaError) {
+        console.error('Error creating target schema:', schemaError);
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Failed to create target schema version',
+            details: schemaError.message
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     // Create the migration
     const { data: migration, error } = await supabase
       .from('schema_migrations')

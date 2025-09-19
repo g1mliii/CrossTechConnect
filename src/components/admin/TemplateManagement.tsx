@@ -15,8 +15,11 @@ import {
   Edit,
   Trash2,
   FileText,
-  Tag
+  Tag,
+  X
 } from 'lucide-react';
+import { TemplateForm } from './TemplateForm';
+import { ConfirmationDialog } from './ConfirmationDialog';
 
 interface Template {
   id: string;
@@ -33,6 +36,12 @@ export function TemplateManagement() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [tagFilter, setTagFilter] = useState<string>('');
+  const [showTemplateForm, setShowTemplateForm] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | undefined>();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
 
   useEffect(() => {
     fetchTemplates();
@@ -67,6 +76,77 @@ export function TemplateManagement() {
   // Get all unique tags
   const allTags = Array.from(new Set(templates.flatMap(t => t.tags)));
 
+  const handleNewTemplate = () => {
+    setEditingTemplate(undefined);
+    setShowTemplateForm(true);
+  };
+
+  const handleEditTemplate = (template: Template) => {
+    setEditingTemplate(template);
+    setShowTemplateForm(true);
+  };
+
+  const handleViewTemplate = (template: Template) => {
+    setPreviewTemplate(template);
+    setShowPreviewDialog(true);
+  };
+
+  const handleDeleteTemplate = (template: Template) => {
+    setTemplateToDelete(template);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+
+    try {
+      const response = await fetch(`/api/admin/templates/${templateToDelete.id}`, {
+        method: 'DELETE'
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setTemplates(templates.filter(t => t.id !== templateToDelete.id));
+        setShowDeleteDialog(false);
+        setTemplateToDelete(null);
+      } else {
+        console.error('Failed to delete template:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to delete template:', error);
+    }
+  };
+
+  const handleSaveTemplate = async (templateData: any) => {
+    try {
+      const url = editingTemplate 
+        ? `/api/admin/templates/${editingTemplate.id}`
+        : '/api/admin/templates';
+      
+      const method = editingTemplate ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(templateData)
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        await fetchTemplates(); // Refresh the list
+        setShowTemplateForm(false);
+        setEditingTemplate(undefined);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to save template:', error);
+      throw error;
+    }
+  };
+
   const handleExportTemplate = async (templateId: string) => {
     try {
       const response = await fetch(`/api/admin/templates/${templateId}/export`);
@@ -82,6 +162,44 @@ export function TemplateManagement() {
     } catch (error) {
       console.error('Failed to export template:', error);
     }
+  };
+
+  const handleImportTemplate = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const templateData = JSON.parse(text);
+
+        const response = await fetch('/api/admin/templates', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            template: templateData,
+            import: true
+          })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          await fetchTemplates(); // Refresh the list
+        } else {
+          console.error('Failed to import template:', result.error);
+          alert('Failed to import template: ' + result.error);
+        }
+      } catch (error) {
+        console.error('Failed to import template:', error);
+        alert('Failed to import template. Please check the file format.');
+      }
+    };
+    input.click();
   };
 
   if (loading) {
@@ -101,11 +219,17 @@ export function TemplateManagement() {
           <p className="text-gray-600">Manage device category templates and import/export functionality</p>
         </div>
         <div className="flex space-x-3">
-          <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+          <button 
+            onClick={handleImportTemplate}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+          >
             <Upload className="w-4 h-4 mr-2" />
             Import Template
           </button>
-          <button className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button 
+            onClick={handleNewTemplate}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
             <Plus className="w-4 h-4 mr-2" />
             New Template
           </button>
@@ -150,14 +274,14 @@ export function TemplateManagement() {
               </div>
               <div className="flex items-center space-x-1">
                 <button
-                  onClick={() => {/* TODO: View template */}}
+                  onClick={() => handleViewTemplate(template)}
                   className="p-1 text-gray-400 hover:text-gray-600"
                   title="View Template"
                 >
                   <Eye className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => {/* TODO: Edit template */}}
+                  onClick={() => handleEditTemplate(template)}
                   className="p-1 text-gray-400 hover:text-blue-600"
                   title="Edit Template"
                 >
@@ -171,7 +295,7 @@ export function TemplateManagement() {
                   <Download className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => {/* TODO: Delete template */}}
+                  onClick={() => handleDeleteTemplate(template)}
                   className="p-1 text-gray-400 hover:text-red-600"
                   title="Delete Template"
                 >
@@ -228,6 +352,87 @@ export function TemplateManagement() {
               : 'Create your first template to get started'
             }
           </p>
+        </div>
+      )}
+
+      {/* Template Form Modal */}
+      <TemplateForm
+        template={editingTemplate}
+        isOpen={showTemplateForm}
+        onClose={() => {
+          setShowTemplateForm(false);
+          setEditingTemplate(undefined);
+        }}
+        onSave={handleSaveTemplate}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeleteDialog}
+        title="Delete Template"
+        message={`Are you sure you want to delete the template "${templateToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={confirmDeleteTemplate}
+        onCancel={() => {
+          setShowDeleteDialog(false);
+          setTemplateToDelete(null);
+        }}
+      />
+
+      {/* Template Preview Dialog */}
+      {showPreviewDialog && previewTemplate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center space-x-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Template Preview</h2>
+              </div>
+              <button
+                onClick={() => setShowPreviewDialog(false)}
+                className="p-2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 120px)' }}>
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">{previewTemplate.name}</h3>
+                  <p className="text-gray-600">{previewTemplate.description}</p>
+                </div>
+                
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-2">Tags</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {previewTemplate.tags.map(tag => (
+                      <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-2">Example Devices</h4>
+                  <ul className="list-disc list-inside text-gray-600">
+                    {previewTemplate.exampleDevices.map(device => (
+                      <li key={device}>{device}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-2">Schema</h4>
+                  <pre className="bg-gray-50 p-4 rounded-lg overflow-auto text-sm">
+                    {JSON.stringify(previewTemplate.baseSchema, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
