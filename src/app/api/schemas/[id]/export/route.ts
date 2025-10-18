@@ -7,9 +7,9 @@ import { schemaRegistry } from '@/lib/schema/registry';
 import { prisma } from '@/lib/database';
 
 interface RouteParams {
-    params: {
+    params: Promise<{
         id: string;
-    };
+    }>;
 }
 
 /**
@@ -18,13 +18,14 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
     try {
         await schemaRegistry.initialize();
+        const resolvedParams = await params;
 
         const { searchParams } = new URL(request.url);
         const version = searchParams.get('version');
         const includeDevices = searchParams.get('includeDevices') === 'true';
 
         // Get the schema
-        const schema = schemaRegistry.getSchema(params.id, version || undefined);
+        const schema = schemaRegistry.getSchema(resolvedParams.id, version || undefined);
         if (!schema) {
             return NextResponse.json(
                 { success: false, error: 'Schema not found' },
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
         // Get category information
         const category = await prisma.deviceCategory.findUnique({
-            where: { id: params.id },
+            where: { id: resolvedParams.id },
             include: {
                 parent: true,
                 children: true
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         // Include sample devices if requested
         if (includeDevices) {
             const devices = await prisma.device.findMany({
-              where: { categoryId: params.id },
+              where: { categoryId: resolvedParams.id },
               take: 10, // Limit to 10 sample devices
               include: {
                 deviceSpecification: true
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
         // Get migration history
         const migrations = await prisma.schemaMigration.findMany({
-          where: { categoryId: params.id },
+          where: { categoryId: resolvedParams.id },
           orderBy: { createdAt: 'asc' }
         });
 

@@ -91,25 +91,31 @@ export function CategoryManagement() {
     }
   };
 
-  const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('Are you sure you want to deprecate this category? This action cannot be undone.')) {
+  const handleDeleteCategory = async (categoryId: string, categoryName: string, deviceCount: number) => {
+    if (deviceCount > 0) {
+      alert(`Cannot delete category "${categoryName}" because it has ${deviceCount} device(s). Please reassign or delete devices first.`);
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete the category "${categoryName}"? This action cannot be undone.`)) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/schemas/${categoryId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          deprecationMessage: 'Category deprecated by admin'
-        })
+      const response = await fetch(`/api/categories/${categoryId}`, {
+        method: 'DELETE'
       });
+
+      const data = await response.json();
 
       if (response.ok) {
         fetchCategories(); // Refresh the list
+      } else {
+        alert(data.error || 'Failed to delete category');
       }
     } catch (error) {
-      console.error('Failed to deprecate category:', error);
+      console.error('Failed to delete category:', error);
+      alert('Failed to delete category');
     }
   };
 
@@ -220,20 +226,20 @@ export function CategoryManagement() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end space-x-2">
-                      <button
-                        onClick={() => {/* TODO: View category details */}}
+                      <Link
+                        href={`/admin/categories/${category.id}`}
                         className="p-1 text-gray-400 hover:text-gray-600"
                         title="View Details"
                       >
                         <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {/* TODO: Edit category */}}
+                      </Link>
+                      <Link
+                        href={`/admin/categories/${category.id}/edit`}
                         className="p-1 text-gray-400 hover:text-blue-600"
                         title="Edit Category"
                       >
                         <Edit className="w-4 h-4" />
-                      </button>
+                      </Link>
                       <button
                         onClick={() => handleExportCategory(category.id)}
                         className="p-1 text-gray-400 hover:text-green-600"
@@ -242,9 +248,9 @@ export function CategoryManagement() {
                         <Download className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDeleteCategory(category.id)}
+                        onClick={() => handleDeleteCategory(category.id, category.name, category.deviceCount)}
                         className="p-1 text-gray-400 hover:text-red-600"
-                        title="Deprecate Category"
+                        title="Delete Category"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

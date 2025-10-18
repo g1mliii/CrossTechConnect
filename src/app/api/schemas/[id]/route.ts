@@ -7,9 +7,9 @@ import { schemaRegistry } from '@/lib/schema/registry';
 import { handlePrismaError } from '@/lib/database';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -18,11 +18,12 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     await schemaRegistry.initialize();
+    const resolvedParams = await params;
     
     const { searchParams } = new URL(request.url);
     const version = searchParams.get('version');
     
-    const schema = schemaRegistry.getSchema(params.id, version || undefined);
+    const schema = schemaRegistry.getSchema(resolvedParams.id, version || undefined);
     
     if (!schema) {
       return NextResponse.json(
@@ -55,12 +56,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     await schemaRegistry.initialize();
+    const resolvedParams = await params;
     
     const body = await request.json();
     const { updates, migrationOperations = [] } = body;
 
     const updatedSchema = await schemaRegistry.updateSchema(
-      params.id,
+      resolvedParams.id,
       updates,
       migrationOperations
     );
@@ -82,11 +84,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     await schemaRegistry.initialize();
+    const resolvedParams = await params;
     
     const body = await request.json();
     const { deprecationMessage } = body;
 
-    const updatedSchema = await schemaRegistry.updateSchema(params.id, {
+    const updatedSchema = await schemaRegistry.updateSchema(resolvedParams.id, {
       deprecated: true,
       deprecationMessage: deprecationMessage || 'Schema has been deprecated'
     });

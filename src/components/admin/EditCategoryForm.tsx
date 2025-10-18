@@ -1,25 +1,52 @@
 /**
- * New Category Form - Interface for creating new device categories
+ * Edit Category Form - Interface for editing existing device categories
  */
 
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, AlertCircle, Info } from 'lucide-react';
+import { Save, AlertCircle } from 'lucide-react';
 
-export function NewCategoryForm() {
+interface EditCategoryFormProps {
+  categoryId: string;
+}
+
+export function EditCategoryForm({ categoryId }: EditCategoryFormProps) {
   const router = useRouter();
   const [categoryName, setCategoryName] = useState('');
-  const [categoryDescription, setCategoryDescription] = useState('');
   const [parentCategory, setParentCategory] = useState('');
+  const [attributes, setAttributes] = useState<Record<string, unknown> | null>(null);
   const [availableCategories, setAvailableCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    fetchCategory();
     fetchCategories();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryId]);
+
+  const fetchCategory = async () => {
+    try {
+      const response = await fetch(`/api/categories/${categoryId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setCategoryName(data.data.name);
+        setParentCategory(data.data.parent_id || '');
+        setAttributes(data.data.attributes);
+      } else {
+        setValidationErrors(['Failed to load category']);
+      }
+    } catch (error) {
+      console.error('Failed to fetch category:', error);
+      setValidationErrors(['Failed to load category']);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -27,7 +54,8 @@ export function NewCategoryForm() {
       const data = await response.json();
       
       if (data.success) {
-        setAvailableCategories(data.data);
+        // Filter out the current category to prevent circular references
+        setAvailableCategories(data.data.filter((cat: { id: string }) => cat.id !== categoryId));
       }
     } catch (error) {
       console.error('Failed to fetch categories:', error);
@@ -50,51 +78,43 @@ export function NewCategoryForm() {
       return;
     }
 
-    setLoading(true);
+    setSaving(true);
 
     try {
-      const response = await fetch('/api/categories', {
-        method: 'POST',
+      const response = await fetch(`/api/categories/${categoryId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: categoryName,
           parentId: parentCategory || null,
-          attributes: categoryDescription ? { description: categoryDescription } : null
+          attributes
         })
       });
 
-      const data = await response.json();
-
       if (response.ok) {
-        // Redirect to schema management for the new category
-        router.push(`/admin/categories/${data.data.id}/schema`);
+        router.push('/admin/categories');
       } else {
-        setValidationErrors([data.error || 'Failed to create category']);
+        const error = await response.json();
+        setValidationErrors([error.error || 'Failed to update category']);
       }
     } catch (error) {
-      console.error('Failed to create category:', error);
-      setValidationErrors(['Failed to create category']);
+      console.error('Failed to update category:', error);
+      setValidationErrors(['Failed to update category']);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Info Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start space-x-3">
-          <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-medium text-blue-900 mb-1">Create Category in Two Steps</h3>
-            <p className="text-sm text-blue-700">
-              First, create the basic category. Then you'll be taken to the Schema Editor to define fields, 
-              validation rules, and specifications for devices in this category.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Validation Errors */}
       {validationErrors.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -109,6 +129,24 @@ export function NewCategoryForm() {
           </ul>
         </div>
       )}
+
+      {/* Schema Management Link */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-sm font-medium text-blue-900 mb-1">Category Schema</h3>
+            <p className="text-sm text-blue-700">
+              To manage fields, validation rules, and specifications for this category, use the Schema Editor.
+            </p>
+          </div>
+          <button
+            onClick={() => router.push(`/admin/categories/${categoryId}/schema`)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+          >
+            Manage Schema
+          </button>
+        </div>
+      </div>
 
       {/* Basic Information */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -145,40 +183,27 @@ export function NewCategoryForm() {
             </select>
           </div>
         </div>
-        
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Description
-          </label>
-          <textarea
-            value={categoryDescription}
-            onChange={(e) => setCategoryDescription(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Describe what types of devices belong to this category..."
-          />
-        </div>
       </div>
 
       {/* Actions */}
       <div className="flex items-center justify-end space-x-3">
         <button
-          onClick={() => router.push('/admin/categories')}
+          onClick={() => router.back()}
           className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
         >
           Cancel
         </button>
         <button
           onClick={handleSubmit}
-          disabled={loading}
+          disabled={saving}
           className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
-          {loading ? (
+          {saving ? (
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
           ) : (
             <Save className="w-4 h-4 mr-2" />
           )}
-          Create & Define Schema
+          Save Changes
         </button>
       </div>
     </div>

@@ -14,13 +14,15 @@ import {
   Database,
   FileText,
   Zap,
-  Users
+  Users,
+  Smartphone
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Categories', href: '/admin/categories', icon: Layers },
+  { name: 'Devices', href: '/admin/devices', icon: Smartphone },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { name: 'Migrations', href: '/admin/migrations', icon: Database },
   { name: 'Templates', href: '/admin/templates', icon: FileText },

@@ -8,9 +8,9 @@ import { SchemaValidator } from '@/lib/schema/validator';
 import { DeviceSpecification } from '@/lib/schema/types';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -19,12 +19,13 @@ interface RouteParams {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     await schemaRegistry.initialize();
+    const resolvedParams = await params;
     
     const body = await request.json();
     const { specification, version } = body;
 
     // Get the schema
-    const schema = schemaRegistry.getSchema(params.id, version);
+    const schema = schemaRegistry.getSchema(resolvedParams.id, version);
     if (!schema) {
       return NextResponse.json(
         { success: false, error: 'Schema not found' },

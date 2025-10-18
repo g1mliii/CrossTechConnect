@@ -19,9 +19,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   // }
 
   return (
-    <div className="admin-panel min-h-screen bg-gray-50 text-gray-900">
+    <div className="admin-panel min-h-screen bg-gray-50 text-gray-900" style={{ colorScheme: 'light' }}>
       <AdminHeader />
-      <div className="flex">
+      <div className="flex min-h-screen">
         <AdminSidebar />
         <main className="flex-1 p-6 bg-gray-50 text-gray-900">
           {children}

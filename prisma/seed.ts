@@ -144,11 +144,187 @@ async function main() {
     },
   });
 
+  // Create a test user for schema creation
+  const testUser = await prisma.user.create({
+    data: {
+      email: 'admin@example.com',
+      passwordHash: '$2a$10$dummyhashforseeding',
+      displayName: 'Admin User',
+      reputationScore: 100
+    }
+  });
+
+  // Create category schemas with dynamic fields
+  const gamingSchema = await prisma.deviceCategorySchema.create({
+    data: {
+      categoryId: gamingCategory.id,
+      version: '1.0',
+      name: 'Gaming Console Schema',
+      description: 'Schema for gaming console specifications',
+      fields: {
+        resolution: {
+          type: 'enum',
+          label: 'Maximum Resolution',
+          description: 'Highest supported output resolution',
+          required: true,
+          options: ['1080p', '1440p', '4K', '8K']
+        },
+        refreshRate: {
+          type: 'number',
+          label: 'Refresh Rate',
+          description: 'Maximum refresh rate in Hz',
+          unit: 'Hz',
+          required: true,
+          min: 30,
+          max: 240
+        },
+        storageCapacity: {
+          type: 'number',
+          label: 'Storage Capacity',
+          description: 'Internal storage capacity',
+          unit: 'GB',
+          required: true,
+          min: 0
+        },
+        rayTracingSupport: {
+          type: 'boolean',
+          label: 'Ray Tracing Support',
+          description: 'Hardware-accelerated ray tracing',
+          default: false
+        },
+        vrSupport: {
+          type: 'boolean',
+          label: 'VR Support',
+          description: 'Virtual reality headset support',
+          default: false
+        },
+        backwardCompatibility: {
+          type: 'array',
+          label: 'Backward Compatibility',
+          description: 'Previous generation consoles supported',
+          placeholder: 'PS4, PS3'
+        }
+      },
+      requiredFields: ['resolution', 'refreshRate', 'storageCapacity'],
+      inheritedFields: [],
+      createdBy: testUser.id
+    }
+  });
+
+  const monitorSchema = await prisma.deviceCategorySchema.create({
+    data: {
+      categoryId: monitorCategory.id,
+      version: '1.0',
+      name: 'Monitor Schema',
+      description: 'Schema for monitor/display specifications',
+      fields: {
+        panelType: {
+          type: 'enum',
+          label: 'Panel Type',
+          description: 'Display panel technology',
+          required: true,
+          options: ['IPS', 'VA', 'TN', 'OLED', 'Mini-LED', 'Micro-LED']
+        },
+        screenSize: {
+          type: 'number',
+          label: 'Screen Size',
+          description: 'Diagonal screen size',
+          unit: 'inches',
+          required: true,
+          min: 10,
+          max: 100
+        },
+        nativeResolution: {
+          type: 'string',
+          label: 'Native Resolution',
+          description: 'Native display resolution',
+          required: true,
+          placeholder: '3840x2160'
+        },
+        refreshRate: {
+          type: 'number',
+          label: 'Refresh Rate',
+          description: 'Maximum refresh rate',
+          unit: 'Hz',
+          required: true,
+          min: 30,
+          max: 500
+        },
+        responseTime: {
+          type: 'number',
+          label: 'Response Time',
+          description: 'Pixel response time',
+          unit: 'ms',
+          min: 0.1,
+          max: 20
+        },
+        hdrSupport: {
+          type: 'array',
+          label: 'HDR Support',
+          description: 'Supported HDR formats',
+          placeholder: 'HDR10, Dolby Vision'
+        },
+        adaptiveSync: {
+          type: 'enum',
+          label: 'Adaptive Sync',
+          description: 'Variable refresh rate technology',
+          options: ['None', 'FreeSync', 'G-Sync', 'G-Sync Compatible', 'Both']
+        },
+        curvature: {
+          type: 'string',
+          label: 'Curvature',
+          description: 'Screen curvature radius (e.g., 1000R)',
+          placeholder: '1000R'
+        }
+      },
+      requiredFields: ['panelType', 'screenSize', 'nativeResolution', 'refreshRate'],
+      inheritedFields: [],
+      createdBy: testUser.id
+    }
+  });
+
+  // Create device specifications for existing devices
+  await prisma.deviceSpecification.create({
+    data: {
+      deviceId: ps5.id,
+      categoryId: gamingCategory.id,
+      schemaVersion: '1.0',
+      specifications: {
+        resolution: '4K',
+        refreshRate: 120,
+        storageCapacity: 825,
+        rayTracingSupport: true,
+        vrSupport: true,
+        backwardCompatibility: ['PS4']
+      }
+    }
+  });
+
+  await prisma.deviceSpecification.create({
+    data: {
+      deviceId: lgC1.id,
+      categoryId: monitorCategory.id,
+      schemaVersion: '1.0',
+      specifications: {
+        panelType: 'OLED',
+        screenSize: 55,
+        nativeResolution: '3840x2160',
+        refreshRate: 120,
+        responseTime: 1,
+        hdrSupport: ['HDR10', 'Dolby Vision', 'HLG'],
+        adaptiveSync: 'Both',
+        curvature: 'Flat'
+      }
+    }
+  });
+
   console.log('✅ Database seeded successfully!');
   console.log(`Created ${await prisma.deviceCategory.count()} device categories`);
   console.log(`Created ${await prisma.standard.count()} technical standards`);
   console.log(`Created ${await prisma.device.count()} devices`);
   console.log(`Created ${await prisma.compatibilityRule.count()} compatibility rules`);
+  console.log(`Created ${await prisma.deviceCategorySchema.count()} category schemas`);
+  console.log(`Created ${await prisma.deviceSpecification.count()} device specifications`);
 }
 
 main()
