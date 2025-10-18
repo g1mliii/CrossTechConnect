@@ -15,7 +15,8 @@ import {
   FileText,
   Zap,
   Users,
-  Smartphone
+  Smartphone,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Categories', href: '/admin/categories', icon: Layers },
   { name: 'Devices', href: '/admin/devices', icon: Smartphone },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+  { name: 'Audit Log', href: '/admin/audit-log', icon: Shield },
   { name: 'Migrations', href: '/admin/migrations', icon: Database },
   { name: 'Templates', href: '/admin/templates', icon: FileText },
   { name: 'Plugins', href: '/admin/plugins', icon: Zap },

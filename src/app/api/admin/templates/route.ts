@@ -29,9 +29,25 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const tags = searchParams.get('tags')?.split(',').filter(Boolean);
 
+    // Check cache first (10 minute TTL - templates change rarely)
+    const { cache, createCacheKey } = await import('@/lib/cache');
+    const cacheKey = createCacheKey('templates', { 
+      search: search || 'none',
+      tags: tags?.join(',') || 'none'
+    });
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return NextResponse.json({
+        success: true,
+        ...cachedData,
+        cached: true
+      });
+    }
+
     let query = supabase
       .from('category_templates')
-      .select('*');
+      .select('*')
+      .limit(100); // Limit to 100 templates
 
     // Apply search filter
     if (search) {
@@ -59,10 +75,18 @@ export async function GET(request: NextRequest) {
       popularity: t.popularity
     }));
 
-    return NextResponse.json({
-      success: true,
+    const result = {
       data: allTemplates,
       count: allTemplates.length
+    };
+
+    // Cache for 10 minutes (templates rarely change)
+    cache.set(cacheKey, result, 600);
+
+    return NextResponse.json({
+      success: true,
+      ...result,
+      cached: false
     });
 
   } catch (error) {
@@ -89,6 +113,11 @@ export async function POST(request: NextRequest) {
     if (isImport) {
       // Import template from JSON
       const importedTemplate = await importTemplate(template);
+      
+      // Invalidate template cache
+      const { cache } = await import('@/lib/cache');
+      cache.clear(); // Clear all template caches
+      
       return NextResponse.json({
         success: true,
         data: importedTemplate,
@@ -97,6 +126,11 @@ export async function POST(request: NextRequest) {
     } else {
       // Create new template
       const newTemplate = await createTemplate(template);
+      
+      // Invalidate template cache
+      const { cache } = await import('@/lib/cache');
+      cache.clear(); // Clear all template caches
+      
       return NextResponse.json({
         success: true,
         data: newTemplate,

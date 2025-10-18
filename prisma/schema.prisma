@@ -25,6 +25,8 @@ model User {
   createdDevices      Device[]
   verificationVotes   VerificationVote[]
   createdSchemas      DeviceCategorySchema[]
+  searchTracking      SearchTracking[]
+  adminAuditLogs      AdminAuditLog[]
 
   @@map("users")
 }
@@ -44,6 +46,7 @@ model DeviceCategory {
   deviceSpecifications DeviceSpecification[]
   schemaMigrations    SchemaMigration[]
   dynamicIndexes      DynamicIndex[]
+  searchTracking      SearchTracking[]
 
   @@map("device_categories")
 }
@@ -353,4 +356,83 @@ model CompatibilityResult {
   @@index([compatibilityType])
   @@index([expiresAt])
   @@map("compatibility_results")
+}
+
+// Search Tracking - Track user searches for analytics
+model SearchTracking {
+  id           String          @id @default(cuid())
+  userId       String?         @map("user_id")
+  query        String
+  filters      Json?
+  resultsCount Int             @default(0) @map("results_count")
+  categoryId   String?         @map("category_id")
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  category     DeviceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([createdAt])
+  @@map("search_tracking")
+}
+
+// User Activity - Track user actions for analytics
+model UserActivity {
+  id           String   @id @default(cuid())
+  userId       String?  @map("user_id")
+  activityType String   @map("activity_type") @db.VarChar(50)
+  entityType   String?  @map("entity_type") @db.VarChar(50)
+  entityId     String?  @map("entity_id")
+  metadata     Json?
+  ipAddress    String?  @map("ip_address") @db.VarChar(45)
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([activityType])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("user_activity")
+}
+
+// Admin Audit Log - Track admin actions for compliance
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  adminId      String   @map("admin_id")
+  action       String   @db.VarChar(100)
+  entityType   String   @map("entity_type") @db.VarChar(50)
+  entityId     String   @map("entity_id")
+  changes      Json?
+  ipAddress    String?  @map("ip_address") @db.VarChar(45)
+  userAgent    String?  @map("user_agent")
+  success      Boolean  @default(true)
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  admin        User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("admin_audit_log")
+}
+
+// Performance Metrics - Track system performance
+model PerformanceMetric {
+  id         String   @id @default(cuid())
+  metricType String   @map("metric_type") @db.VarChar(50)
+  metricName String   @map("metric_name") @db.VarChar(100)
+  value      Decimal  @db.Decimal(10,2)
+  unit       String?  @db.VarChar(20)
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([metricType])
+  @@index([metricName])
+  @@index([createdAt])
+  @@map("performance_metrics")
 }

@@ -229,10 +229,10 @@ export function TemplateForm({ template, isOpen, onClose, onSave }: TemplateForm
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl my-8 flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center space-x-2">
             <FileText className="w-5 h-5 text-blue-600" />
             <h2 className="text-xl font-semibold text-gray-900">
@@ -256,9 +256,9 @@ export function TemplateForm({ template, isOpen, onClose, onSave }: TemplateForm
           </div>
         </div>
 
-        <div className="flex h-[calc(90vh-120px)]">
+        <div className="flex flex-1 overflow-hidden">
           {/* Form */}
-          <div className={`${showPreview ? 'w-1/2' : 'w-full'} overflow-y-auto p-6`}>
+          <div className={`${showPreview ? 'w-1/2' : 'w-full'} overflow-y-auto p-6 flex-1`}>
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Basic Information */}
               <div className="space-y-4">
@@ -497,7 +497,7 @@ export function TemplateForm({ template, isOpen, onClose, onSave }: TemplateForm
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200">
+        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 flex-shrink-0 bg-white">
           <button
             type="button"
             onClick={onClose}

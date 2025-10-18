@@ -19,6 +19,10 @@ import {
   Clock
 } from 'lucide-react';
 import Link from 'next/link';
+import { useNotifications, NotificationSystem } from './NotificationSystem';
+import { LoadingState, LoadingButton } from './LoadingState';
+import { ConfirmationDialog } from './ConfirmationDialog';
+import { logAuditEntry } from '@/lib/audit-logger';
 interface CategoryWithStats {
   id: string;
   name: string;
@@ -35,6 +39,9 @@ export function CategoryManagement() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'deprecated' | 'draft'>('all');
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; deviceCount: number } | null>(null);
+  const { notifications, dismissNotification, success, error, warning } = useNotifications();
 
   useEffect(() => {
     fetchCategories();
@@ -58,9 +65,12 @@ export function CategoryManagement() {
         }));
         
         setCategories(categoriesWithStats);
+      } else {
+        error('Failed to load categories', data.error);
       }
-    } catch (error) {
-      console.error('Failed to fetch categories:', error);
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
+      error('Failed to load categories', 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -77,6 +87,9 @@ export function CategoryManagement() {
   const handleExportCategory = async (categoryId: string) => {
     try {
       const response = await fetch(`/api/schemas/${categoryId}/export`);
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -86,49 +99,92 @@ export function CategoryManagement() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (error) {
-      console.error('Failed to export category:', error);
+      
+      success('Category exported', 'Schema downloaded successfully');
+      
+      // Log audit entry
+      await logAuditEntry({
+        adminId: 'current-admin-id', // TODO: Get from auth context
+        action: 'export_category',
+        entityType: 'category',
+        entityId: categoryId,
+      });
+    } catch (err) {
+      console.error('Failed to export category:', err);
+      error('Export failed', 'Could not export category schema');
     }
   };
 
-  const handleDeleteCategory = async (categoryId: string, categoryName: string, deviceCount: number) => {
+  const handleDeleteCategory = (categoryId: string, categoryName: string, deviceCount: number) => {
     if (deviceCount > 0) {
-      alert(`Cannot delete category "${categoryName}" because it has ${deviceCount} device(s). Please reassign or delete devices first.`);
+      warning(
+        'Cannot delete category',
+        `Category "${categoryName}" has ${deviceCount} device(s). Please reassign or delete devices first.`
+      );
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete the category "${categoryName}"? This action cannot be undone.`)) {
-      return;
-    }
+    setConfirmDelete({ id: categoryId, name: categoryName, deviceCount });
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!confirmDelete) return;
+
+    const { id, name } = confirmDelete;
+    setDeleteLoading(id);
 
     try {
-      const response = await fetch(`/api/categories/${categoryId}`, {
+      const response = await fetch(`/api/categories/${id}`, {
         method: 'DELETE'
       });
 
       const data = await response.json();
 
       if (response.ok) {
+        success('Category deleted', `"${name}" has been removed successfully`);
+        
+        // Log audit entry
+        await logAuditEntry({
+          adminId: 'current-admin-id', // TODO: Get from auth context
+          action: 'delete_category',
+          entityType: 'category',
+          entityId: id,
+          changes: { name },
+        });
+        
         fetchCategories(); // Refresh the list
       } else {
-        alert(data.error || 'Failed to delete category');
+        error('Delete failed', data.error || 'Failed to delete category');
       }
-    } catch (error) {
-      console.error('Failed to delete category:', error);
-      alert('Failed to delete category');
+    } catch (err) {
+      console.error('Failed to delete category:', err);
+      error('Delete failed', 'An unexpected error occurred');
+    } finally {
+      setDeleteLoading(null);
+      setConfirmDelete(null);
     }
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <LoadingState text="Loading categories..." />;
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <NotificationSystem notifications={notifications} onDismiss={dismissNotification} />
+      
+      <ConfirmationDialog
+        isOpen={!!confirmDelete}
+        title="Delete Category"
+        message={`Are you sure you want to delete "${confirmDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={confirmDeleteCategory}
+        onCancel={() => setConfirmDelete(null)}
+      />
+      
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -249,7 +305,8 @@ export function CategoryManagement() {
                       </button>
                       <button
                         onClick={() => handleDeleteCategory(category.id, category.name, category.deviceCount)}
-                        className="p-1 text-gray-400 hover:text-red-600"
+                        disabled={deleteLoading === category.id}
+                        className="p-1 text-gray-400 hover:text-red-600 disabled:opacity-50"
                         title="Delete Category"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -269,6 +326,7 @@ export function CategoryManagement() {
         )}
       </div>
     </div>
+    </>
   );
 }
 

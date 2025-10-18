@@ -22,6 +22,24 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
+    // Check cache first (3 minute TTL)
+    const { cache, createCacheKey } = await import('@/lib/cache');
+    const cacheKey = createCacheKey('devices', { 
+      categoryId: categoryId || 'all',
+      verified: verified || 'all',
+      search: search || 'none',
+      limit: limit.toString(),
+      offset: offset.toString()
+    });
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return NextResponse.json({
+        success: true,
+        ...cachedData,
+        cached: true
+      });
+    }
+
     let query = supabase
       .from('devices')
       .select(`
@@ -63,8 +81,7 @@ export async function GET(request: NextRequest) {
     const devices = devicesResult.data || [];
     const totalCount = countResult.count || 0;
 
-    return NextResponse.json({
-      success: true,
+    const result = {
       data: devices,
       pagination: {
         total: totalCount,
@@ -72,6 +89,15 @@ export async function GET(request: NextRequest) {
         offset,
         hasMore: offset + limit < totalCount
       }
+    };
+
+    // Cache for 3 minutes
+    cache.set(cacheKey, result, 180);
+
+    return NextResponse.json({
+      success: true,
+      ...result,
+      cached: false
     });
 
   } catch (error) {
@@ -166,6 +192,12 @@ export async function POST(request: NextRequest) {
     if (error) {
       throw error;
     }
+
+    // Invalidate caches since new device was created
+    const { invalidateAnalyticsCache, cache } = await import('@/lib/cache');
+    invalidateAnalyticsCache();
+    // Clear all device list caches (they have many variations)
+    cache.clear(); // Nuclear option but safest for now
 
     return NextResponse.json({
       success: true,

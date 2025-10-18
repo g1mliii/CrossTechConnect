@@ -127,6 +127,10 @@ export async function PUT(
       popularity: template.popularity
     };
 
+    // Invalidate template cache
+    const { cache } = await import('@/lib/cache');
+    cache.clear(); // Clear all template caches
+
     return NextResponse.json({
       success: true,
       data: formattedTemplate,
@@ -163,6 +167,10 @@ export async function DELETE(
     if (error) {
       throw error;
     }
+
+    // Invalidate template cache
+    const { cache } = await import('@/lib/cache');
+    cache.clear(); // Clear all template caches
 
     return NextResponse.json({
       success: true,

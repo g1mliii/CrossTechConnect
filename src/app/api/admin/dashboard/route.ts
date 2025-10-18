@@ -15,6 +15,18 @@ const supabase = createClient(
  */
 export async function GET() {
   try {
+    // Check cache first (2 minute TTL for dashboard)
+    const { cache, createCacheKey } = await import('@/lib/cache');
+    const cacheKey = createCacheKey('dashboard', {});
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return NextResponse.json({
+        success: true,
+        data: cachedData,
+        cached: true
+      });
+    }
+
     // Get counts for main entities
     const [
       categoriesResult,
@@ -106,9 +118,13 @@ export async function GET() {
       systemHealth
     };
 
+    // Cache for 2 minutes (dashboard should be relatively fresh)
+    cache.set(cacheKey, stats, 120);
+
     return NextResponse.json({
       success: true,
-      data: stats
+      data: stats,
+      cached: false
     });
 
   } catch (error) {

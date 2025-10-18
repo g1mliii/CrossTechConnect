@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
       .select(`
         *,
         device_categories!inner(name)
-      `);
+      `)
+      .limit(200); // Limit to 200 most recent migrations
 
     if (categoryId) {
       query = query.eq('category_id', categoryId);

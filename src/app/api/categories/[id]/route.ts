@@ -109,6 +109,12 @@ export async function PUT(
       .select('*', { count: 'exact', head: true })
       .eq('category_id', id);
 
+    // Invalidate caches since category data changed
+    const { invalidateAnalyticsCache, cache, createCacheKey } = await import('@/lib/cache');
+    invalidateAnalyticsCache();
+    cache.delete(createCacheKey('categories', { parentId: 'all', includeDeviceCount: 'true' }));
+    cache.delete(createCacheKey('categories', { parentId: 'all', includeDeviceCount: 'false' }));
+
     return NextResponse.json({
       success: true,
       data: {
@@ -181,6 +187,12 @@ export async function DELETE(
     if (error) {
       throw error;
     }
+
+    // Invalidate caches since category was deleted
+    const { invalidateAnalyticsCache, cache, createCacheKey } = await import('@/lib/cache');
+    invalidateAnalyticsCache();
+    cache.delete(createCacheKey('categories', { parentId: 'all', includeDeviceCount: 'true' }));
+    cache.delete(createCacheKey('categories', { parentId: 'all', includeDeviceCount: 'false' }));
 
     return NextResponse.json({
       success: true,
