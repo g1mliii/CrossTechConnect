@@ -5,12 +5,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Edit, 
-  Trash2, 
+import {
+  Plus,
+  Search,
+  Filter,
+  Edit,
+  Trash2,
   Eye,
   CheckCircle,
   AlertTriangle,
@@ -38,18 +38,30 @@ export function DeviceManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterVerified, setFilterVerified] = useState<string>('all');
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+
+  // Debounced search effect
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setOffset(0); // Reset pagination on search
+      fetchDevices(true);
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterCategory, filterVerified]);
 
   useEffect(() => {
-    fetchDevices();
     fetchCategories();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCategory, filterVerified]);
+  }, []);
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/categories');
-      const data = await response.json();
-      
+      const { fetchWithCache } = await import('@/lib/fetch-with-cache');
+      const data = await fetchWithCache('/api/categories');
+
       if (data.success) {
         setCategories(data.data);
       }
@@ -58,23 +70,35 @@ export function DeviceManagement() {
     }
   };
 
-  const fetchDevices = async () => {
+  const fetchDevices = async (reset = false) => {
     try {
-      let url = '/api/devices?limit=100';
-      
+      setLoading(true);
+      const currentOffset = reset ? 0 : offset;
+      let url = `/api/devices?limit=50&offset=${currentOffset}`;
+
+      if (searchTerm) {
+        url += `&search=${encodeURIComponent(searchTerm)}`;
+      }
+
       if (filterCategory !== 'all') {
         url += `&categoryId=${filterCategory}`;
       }
-      
+
       if (filterVerified !== 'all') {
         url += `&verified=${filterVerified}`;
       }
 
-      const response = await fetch(url);
-      const data = await response.json();
-      
+      const { fetchWithCache } = await import('@/lib/fetch-with-cache');
+      const data = await fetchWithCache(url);
+
       if (data.success) {
-        setDevices(data.data);
+        if (reset) {
+          setDevices(data.data);
+        } else {
+          setDevices(prev => [...prev, ...data.data]);
+        }
+        setTotal(data.pagination?.total || 0);
+        setHasMore(data.pagination?.hasMore || false);
       }
     } catch (error) {
       console.error('Failed to fetch devices:', error);
@@ -96,6 +120,10 @@ export function DeviceManagement() {
       const data = await response.json();
 
       if (response.ok) {
+        // Invalidate cache and refresh
+        const { invalidateFetchCache } = await import('@/lib/fetch-with-cache');
+        invalidateFetchCache('/api/devices');
+        invalidateFetchCache('/api/categories');
         fetchDevices(); // Refresh the list
       } else {
         alert(data.error || 'Failed to delete device');
@@ -106,14 +134,10 @@ export function DeviceManagement() {
     }
   };
 
-  const filteredDevices = devices.filter(device => {
-    const matchesSearch = 
-      device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      device.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (device.model && device.model.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    return matchesSearch;
-  });
+  const loadMore = () => {
+    setOffset(prev => prev + 50);
+    fetchDevices(false);
+  };
 
   if (loading) {
     return (
@@ -206,7 +230,7 @@ export function DeviceManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredDevices.map((device) => (
+              {devices.map((device) => (
                 <tr key={device.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div>
@@ -265,13 +289,35 @@ export function DeviceManagement() {
             </tbody>
           </table>
         </div>
-        
-        {filteredDevices.length === 0 && (
+
+        {devices.length === 0 && !loading && (
           <div className="text-center py-12">
             <p className="text-gray-500">No devices found matching your criteria</p>
           </div>
         )}
       </div>
+
+      {/* Pagination Info and Load More */}
+      {devices.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Showing {devices.length} of {total.toLocaleString()} devices
+            </p>
+            {hasMore && (
+              <button
+                onClick={loadMore}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Loading...' : 'Load More'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+export default DeviceManagement;

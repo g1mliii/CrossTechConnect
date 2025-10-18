@@ -12,6 +12,7 @@ const supabase = createClient(
 
 /**
  * GET /api/devices - Get all devices with filtering
+ * Optimized for large databases with proper caching and efficient queries
  */
 export async function GET(request: NextRequest) {
   try {
@@ -19,10 +20,10 @@ export async function GET(request: NextRequest) {
     const categoryId = searchParams.get('categoryId');
     const verified = searchParams.get('verified');
     const search = searchParams.get('search');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100); // Cap at 100
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Check cache first (3 minute TTL)
+    // Check cache first (5 minute TTL)
     const { cache, createCacheKey } = await import('@/lib/cache');
     const cacheKey = createCacheKey('devices', { 
       categoryId: categoryId || 'all',
@@ -40,22 +41,26 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Build optimized query - only select needed fields for admin list view
     let query = supabase
       .from('devices')
       .select(`
-        *,
-        device_categories!inner(id, name),
-        device_standards(
-          id, port_count, notes, verified,
-          standards(id, name, category, version)
-        )
-      `);
+        id,
+        name,
+        brand,
+        model,
+        category_id,
+        verified,
+        confidence_score,
+        created_at,
+        device_categories!inner(id, name)
+      `, { count: 'exact' });
 
     if (categoryId) {
       query = query.eq('category_id', categoryId);
     }
 
-    if (verified !== null) {
+    if (verified !== null && verified !== undefined) {
       query = query.eq('verified', verified === 'true');
     }
 
@@ -63,36 +68,26 @@ export async function GET(request: NextRequest) {
       query = query.or(`name.ilike.%${search}%,brand.ilike.%${search}%,model.ilike.%${search}%`);
     }
 
-    const [devicesResult, countResult] = await Promise.all([
-      query
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1),
-      supabase
-        .from('devices')
-        .select('*', { count: 'exact', head: true })
-        .eq(categoryId ? 'category_id' : 'id', categoryId || 'dummy')
-        .eq(verified !== null ? 'verified' : 'id', verified === 'true' ? true : 'dummy')
-    ]);
+    const { data: devices, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-    if (devicesResult.error) {
-      throw devicesResult.error;
+    if (error) {
+      throw error;
     }
 
-    const devices = devicesResult.data || [];
-    const totalCount = countResult.count || 0;
-
     const result = {
-      data: devices,
+      data: devices || [],
       pagination: {
-        total: totalCount,
+        total: count || 0,
         limit,
         offset,
-        hasMore: offset + limit < totalCount
+        hasMore: offset + limit < (count || 0)
       }
     };
 
-    // Cache for 3 minutes
-    cache.set(cacheKey, result, 180);
+    // Cache for 5 minutes
+    cache.set(cacheKey, result, 300);
 
     return NextResponse.json({
       success: true,

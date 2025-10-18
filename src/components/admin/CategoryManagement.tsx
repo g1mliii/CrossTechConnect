@@ -41,15 +41,37 @@ export function CategoryManagement() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'deprecated' | 'draft'>('all');
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; deviceCount: number } | null>(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const { notifications, dismissNotification, success, error, warning } = useNotifications();
 
+  // Debounced search effect
   useEffect(() => {
-    fetchCategories();
-  }, []);
+    const timeoutId = setTimeout(() => {
+      setOffset(0); // Reset pagination on search/filter change
+      fetchCategories(true);
+    }, 300); // 300ms debounce
 
-  const fetchCategories = async () => {
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterStatus]);
+
+  const fetchCategories = async (reset = false) => {
     try {
-      const response = await fetch('/api/categories?includeDeviceCount=true');
+      setLoading(true);
+      const currentOffset = reset ? 0 : offset;
+      let url = `/api/categories?includeDeviceCount=true&limit=50&offset=${currentOffset}`;
+      
+      if (searchTerm) {
+        url += `&search=${encodeURIComponent(searchTerm)}`;
+      }
+      
+      if (filterStatus !== 'all') {
+        url += `&status=${filterStatus}`;
+      }
+      
+      const response = await fetch(url);
       const data = await response.json();
       
       if (data.success) {
@@ -64,7 +86,14 @@ export function CategoryManagement() {
           status: 'active' as const
         }));
         
-        setCategories(categoriesWithStats);
+        if (reset) {
+          setCategories(categoriesWithStats);
+        } else {
+          setCategories(prev => [...prev, ...categoriesWithStats]);
+        }
+        
+        setTotal(data.pagination?.total || data.count || 0);
+        setHasMore(data.pagination?.hasMore || false);
       } else {
         error('Failed to load categories', data.error);
       }
@@ -76,13 +105,10 @@ export function CategoryManagement() {
     }
   };
 
-  const filteredCategories = categories.filter(category => {
-    const matchesSearch = category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         category.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || category.status === filterStatus;
-    
-    return matchesSearch && matchesFilter;
-  });
+  const loadMore = () => {
+    setOffset(prev => prev + 50);
+    fetchCategories(false);
+  };
 
   const handleExportCategory = async (categoryId: string) => {
     try {
@@ -260,7 +286,7 @@ export function CategoryManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredCategories.map((category) => (
+              {categories.map((category) => (
                 <tr key={category.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div>
@@ -319,12 +345,32 @@ export function CategoryManagement() {
           </table>
         </div>
         
-        {filteredCategories.length === 0 && (
+        {categories.length === 0 && !loading && (
           <div className="text-center py-12">
             <p className="text-gray-500">No categories found matching your criteria</p>
           </div>
         )}
       </div>
+
+      {/* Pagination Info and Load More */}
+      {categories.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Showing {categories.length} of {total.toLocaleString()} categories
+            </p>
+            {hasMore && (
+              <button
+                onClick={loadMore}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Loading...' : 'Load More'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
     </>
   );
