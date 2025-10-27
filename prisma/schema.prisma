@@ -47,6 +47,8 @@ model DeviceCategory {
   schemaMigrations    SchemaMigration[]
   dynamicIndexes      DynamicIndex[]
   searchTracking      SearchTracking[]
+  sourceCompatibilityRules CategoryCompatibilityRule[] @relation("SourceCategoryRules")
+  targetCompatibilityRules CategoryCompatibilityRule[] @relation("TargetCategoryRules")
 
   @@map("device_categories")
 }
@@ -139,7 +141,7 @@ model DeviceStandard {
   @@map("device_standards")
 }
 
-// Compatibility Rules
+// Compatibility Rules (Standards-based)
 model CompatibilityRule {
   id                 String   @id @default(cuid())
   standardAId        String   @map("standard_a_id")
@@ -154,6 +156,34 @@ model CompatibilityRule {
   standardB Standard @relation("StandardB", fields: [standardBId], references: [id])
 
   @@map("compatibility_rules")
+}
+
+// Category Compatibility Rules (Field-based)
+model CategoryCompatibilityRule {
+  id                 String   @id @default(cuid())
+  name               String   @db.VarChar(100)
+  description        String?
+  sourceCategoryId   String   @map("source_category_id")
+  targetCategoryId   String   @map("target_category_id")
+  sourceField        String   @map("source_field") @db.VarChar(100)
+  targetField        String   @map("target_field") @db.VarChar(100)
+  condition          String   // JavaScript expression for compatibility check
+  compatibilityType  String   @map("compatibility_type") @db.VarChar(20) // full, partial, none
+  message            String
+  limitations        String[]
+  recommendations    String[]
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  sourceCategory DeviceCategory @relation("SourceCategoryRules", fields: [sourceCategoryId], references: [id], onDelete: Cascade)
+  targetCategory DeviceCategory @relation("TargetCategoryRules", fields: [targetCategoryId], references: [id], onDelete: Cascade)
+
+  @@index([sourceCategoryId])
+  @@index([targetCategoryId])
+  @@index([sourceField])
+  @@index([targetField])
+  @@map("category_compatibility_rules")
 }
 
 // User Device Libraries

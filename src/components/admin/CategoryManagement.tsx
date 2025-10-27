@@ -16,13 +16,15 @@ import {
   Upload,
   AlertTriangle,
   CheckCircle,
-  Clock
+  Clock,
+  GitBranch
 } from 'lucide-react';
 import Link from 'next/link';
 import { useNotifications, NotificationSystem } from './NotificationSystem';
 import { LoadingState, LoadingButton } from './LoadingState';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { logAuditEntry } from '@/lib/audit-logger';
+import { CompatibilityRuleBuilder } from './CompatibilityRuleBuilder';
 interface CategoryWithStats {
   id: string;
   name: string;
@@ -35,27 +37,75 @@ interface CategoryWithStats {
 }
 
 export function CategoryManagement() {
+  const [activeTab, setActiveTab] = useState<'categories' | 'compatibility'>('categories');
   const [categories, setCategories] = useState<CategoryWithStats[]>([]);
+  const [compatibilityRules, setCompatibilityRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'deprecated' | 'draft'>('all');
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string; deviceCount: number } | null>(null);
   const [total, setTotal] = useState(0);
+  const [rulesTotal, setRulesTotal] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [rulesOffset, setRulesOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [rulesHasMore, setRulesHasMore] = useState(false);
+  const [showRuleBuilder, setShowRuleBuilder] = useState(false);
   const { notifications, dismissNotification, success, error, warning } = useNotifications();
 
   // Debounced search effect
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setOffset(0); // Reset pagination on search/filter change
-      fetchCategories(true);
+      if (activeTab === 'categories') {
+        fetchCategories(true);
+      }
     }, 300); // 300ms debounce
 
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterStatus]);
+  }, [searchTerm, filterStatus, activeTab]);
+
+  // Fetch rules when switching to compatibility tab
+  useEffect(() => {
+    if (activeTab === 'compatibility') {
+      fetchCompatibilityRules();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const fetchCompatibilityRules = async (reset = false) => {
+    setLoading(true);
+    try {
+      const currentOffset = reset ? 0 : rulesOffset;
+      const response = await fetch(`/api/compatibility/rules?limit=50&offset=${currentOffset}`);
+      const data = await response.json();
+      if (data.success) {
+        if (reset) {
+          setCompatibilityRules(data.data);
+        } else {
+          // Deduplicate by ID when appending
+          setCompatibilityRules(prev => {
+            const existingIds = new Set(prev.map(r => r.id));
+            const newRules = data.data.filter((r: any) => !existingIds.has(r.id));
+            return [...prev, ...newRules];
+          });
+        }
+        setRulesTotal(data.pagination?.total || 0);
+        setRulesHasMore(data.pagination?.hasMore || false);
+      }
+    } catch (err) {
+      console.error('Failed to fetch compatibility rules:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMoreRules = () => {
+    setRulesOffset(prev => prev + 50);
+    fetchCompatibilityRules(false);
+  };
 
   const fetchCategories = async (reset = false) => {
     try {
@@ -215,23 +265,65 @@ export function CategoryManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Category Management</h1>
-          <p className="text-gray-600">Manage device categories, schemas, and specifications</p>
+          <p className="text-gray-600">Manage device categories, schemas, and compatibility rules</p>
         </div>
         <div className="flex space-x-3">
-          <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors">
-            <Upload className="w-4 h-4 mr-2" />
-            Import
-          </button>
-          <Link
-            href="/admin/categories/new"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Category
-          </Link>
+          {activeTab === 'categories' ? (
+            <>
+              <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                <Upload className="w-4 h-4 mr-2" />
+                Import
+              </button>
+              <Link
+                href="/admin/categories/new"
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Category
+              </Link>
+            </>
+          ) : (
+            <button
+              onClick={() => setShowRuleBuilder(true)}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Rule
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'categories'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Categories & Schemas
+          </button>
+          <button
+            onClick={() => setActiveTab('compatibility')}
+            className={`inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'compatibility'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <GitBranch className="w-4 h-4 mr-2" />
+            Compatibility Rules
+          </button>
+        </nav>
+      </div>
+
+      {/* Categories Tab Content */}
+      {activeTab === 'categories' && (
+        <>
       {/* Filters */}
       <div className="flex items-center space-x-4 bg-white p-4 rounded-lg border border-gray-200">
         <div className="flex-1 relative">
@@ -369,6 +461,103 @@ export function CategoryManagement() {
               </button>
             )}
           </div>
+        </div>
+      )}
+      </>
+      )}
+
+      {/* Compatibility Rules Tab Content */}
+      {activeTab === 'compatibility' && (
+        <div className="space-y-6">
+          {showRuleBuilder ? (
+            <CompatibilityRuleBuilder
+              onSave={() => {
+                setShowRuleBuilder(false);
+                fetchCompatibilityRules();
+                success('Compatibility rule created successfully');
+              }}
+              onCancel={() => setShowRuleBuilder(false)}
+            />
+          ) : compatibilityRules.length > 0 ? (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rule Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source → Target</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fields</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {compatibilityRules.map((rule, index) => (
+                    <tr key={rule.id || `rule-${index}`} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{rule.name}</div>
+                        {rule.description && (
+                          <div className="text-sm text-gray-500">{rule.description}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {rule.sourceCategory?.name || rule.sourceCategoryId} → {rule.targetCategory?.name || rule.targetCategoryId}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {rule.sourceField} → {rule.targetField}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          rule.compatibilityType === 'full' ? 'bg-green-100 text-green-800' :
+                          rule.compatibilityType === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {rule.compatibilityType}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(rule.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              
+              {/* Pagination for Rules */}
+              {compatibilityRules.length > 0 && (
+                <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">
+                      Showing {compatibilityRules.length} of {rulesTotal.toLocaleString()} rules
+                    </p>
+                    {rulesHasMore && (
+                      <button
+                        onClick={loadMoreRules}
+                        disabled={loading}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loading ? 'Loading...' : 'Load More'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <GitBranch className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Compatibility Rules Yet</h3>
+              <p className="text-gray-600 mb-6">
+                Create rules to automatically check compatibility between device categories based on their specifications.
+              </p>
+              <button
+                onClick={() => setShowRuleBuilder(true)}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create First Rule
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

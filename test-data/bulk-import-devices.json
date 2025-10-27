@@ -1,0 +1,44 @@
+[
+  {
+    "name": "PlayStation 5",
+    "brand": "Sony",
+    "model": "CFI-1215A",
+    "category_id": "cat_gaming",
+    "width_cm": 39.0,
+    "height_cm": 10.4,
+    "depth_cm": 26.0,
+    "weight_kg": 4.5,
+    "power_watts": 350,
+    "power_type": "AC",
+    "description": "Next-gen gaming console with 4K support",
+    "manual_url": "https://example.com/ps5-manual"
+  },
+  {
+    "name": "Xbox Series X",
+    "brand": "Microsoft",
+    "model": "RRT-00001",
+    "category_id": "cat_gaming",
+    "width_cm": 30.1,
+    "height_cm": 15.1,
+    "depth_cm": 15.1,
+    "weight_kg": 4.45,
+    "power_watts": 315,
+    "power_type": "AC",
+    "description": "Powerful gaming console with ray tracing",
+    "manual_url": "https://example.com/xbox-manual"
+  },
+  {
+    "name": "Nintendo Switch OLED",
+    "brand": "Nintendo",
+    "model": "HEG-001",
+    "category_id": "cat_gaming",
+    "width_cm": 24.2,
+    "height_cm": 10.2,
+    "depth_cm": 13.9,
+    "weight_kg": 0.42,
+    "power_watts": 39,
+    "power_type": "AC",
+    "description": "Portable gaming console with OLED screen",
+    "manual_url": "https://example.com/switch-manual"
+  }
+]

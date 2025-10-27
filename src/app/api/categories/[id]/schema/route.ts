@@ -73,14 +73,12 @@ export async function GET(request: NextRequest, context: RouteParams) {
     }
 
     if (filteredSchemas.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'No schema found for this category',
-          categoryId: params.id
-        },
-        { status: 404 }
-      );
+      // Return success with null data instead of 404 - this is expected for categories without schemas
+      return NextResponse.json({
+        success: true,
+        data: null,
+        message: 'No schema defined for this category yet'
+      });
     }
 
     const schema = filteredSchemas[0];

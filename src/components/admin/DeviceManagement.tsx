@@ -14,9 +14,11 @@ import {
   Eye,
   CheckCircle,
   AlertTriangle,
-  Upload
+  Upload,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
+import { BulkImportInterface } from './BulkImportInterface';
 
 interface Device {
   id: string;
@@ -41,6 +43,7 @@ export function DeviceManagement() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   // Debounced search effect
   useEffect(() => {
@@ -156,9 +159,12 @@ export function DeviceManagement() {
           <p className="text-gray-600">Manage devices, specifications, and verification status</p>
         </div>
         <div className="flex space-x-3">
-          <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+          <button 
+            onClick={() => setShowBulkImport(true)}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+          >
             <Upload className="w-4 h-4 mr-2" />
-            Import
+            Bulk Import
           </button>
           <Link
             href="/admin/devices/new"
@@ -169,6 +175,32 @@ export function DeviceManagement() {
           </Link>
         </div>
       </div>
+
+      {/* Bulk Import Modal */}
+      {showBulkImport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Bulk Import Devices</h2>
+              <button
+                onClick={() => setShowBulkImport(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <BulkImportInterface
+                onImportComplete={(results) => {
+                  console.log('Import completed:', results);
+                  setShowBulkImport(false);
+                  fetchDevices(true); // Refresh device list
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex items-center space-x-4 bg-white p-4 rounded-lg border border-gray-200">
