@@ -1,11 +1,17 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { config } from 'dotenv';
 
-// Mock environment variables
-process.env.JWT_SECRET = 'test-jwt-secret';
-process.env.BCRYPT_ROUNDS = '4'; // Lower rounds for faster tests
-process.env.REDIS_URL = 'redis://localhost:6379';
-process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_db';
+// Load environment variables from .env.local
+config({ path: '.env.local' });
+
+// Mock environment variables (fallback if .env.local not loaded)
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
+process.env.BCRYPT_ROUNDS = process.env.BCRYPT_ROUNDS || '4';
+process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db';
+process.env.NEXT_PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://test.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-key';
 
 // Mock Redis client
 vi.mock('@/lib/redis', () => ({

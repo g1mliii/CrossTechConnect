@@ -27,6 +27,11 @@ model User {
   createdSchemas      DeviceCategorySchema[]
   searchTracking      SearchTracking[]
   adminAuditLogs      AdminAuditLog[]
+  createdDocumentation DeviceDocumentation[]
+  reviewedExtractions DocumentationExtraction[]
+  contentRatings      ContentRating[]
+  reportedContent     ContentModerationQueue[] @relation("ReportedBy")
+  moderatedContent    ContentModerationQueue[] @relation("ModeratedBy")
 
   @@map("users")
 }
@@ -49,6 +54,7 @@ model DeviceCategory {
   searchTracking      SearchTracking[]
   sourceCompatibilityRules CategoryCompatibilityRule[] @relation("SourceCategoryRules")
   targetCompatibilityRules CategoryCompatibilityRule[] @relation("TargetCategoryRules")
+  documentationExtractions DocumentationExtraction[]
 
   @@map("device_categories")
 }
@@ -113,6 +119,9 @@ model Device {
   deviceSpecification   DeviceSpecification?
   sourceCompatibilities CompatibilityResult[] @relation("SourceCompatibility")
   targetCompatibilities CompatibilityResult[] @relation("TargetCompatibility")
+  documentation         DeviceDocumentation[]
+  documentationExtractions DocumentationExtraction[]
+  softwareCompatibility SoftwareCompatibility[]
 
   @@index([categoryId])
   @@index([brand])
@@ -268,6 +277,7 @@ model DeviceCategorySchema {
   creator             User                  @relation(fields: [createdBy], references: [id])
   deviceSpecifications DeviceSpecification[]
   schemaMigrations    SchemaMigration[]
+  documentationExtractions DocumentationExtraction[]
 
   @@unique([categoryId, version])
   @@index([categoryId])
@@ -465,4 +475,164 @@ model PerformanceMetric {
   @@index([metricName])
   @@index([createdAt])
   @@map("performance_metrics")
+}
+
+// Documentation and Content Management System
+
+// Device Documentation - Stores extracted and user-contributed documentation
+model DeviceDocumentation {
+  id                String   @id @default(cuid())
+  deviceId          String   @map("device_id")
+  title             String   @db.VarChar(255)
+  contentType       String   @map("content_type") @db.VarChar(50) // manual, guide, review, tip, troubleshooting
+  content           String   // Markdown formatted content
+  summary           String?  @db.VarChar(500)
+  sourceType        String   @map("source_type") @db.VarChar(50) // ai_extracted, user_contributed, official
+  sourceUrl         String?  @map("source_url")
+  originalFileUrl   String?  @map("original_file_url") // Supabase storage URL
+  extractionMethod  String?  @map("extraction_method") @db.VarChar(50) // ai_pdf, ai_scrape, manual
+  confidenceScore   Decimal? @map("confidence_score") @db.Decimal(3,2)
+  verified          Boolean  @default(false)
+  helpfulVotes      Int      @default(0) @map("helpful_votes")
+  notHelpfulVotes   Int      @default(0) @map("not_helpful_votes")
+  viewCount         Int      @default(0) @map("view_count")
+  cacheStatus       String   @default("hot") @map("cache_status") @db.VarChar(20) // hot, warm, cold
+  lastAccessedAt    DateTime? @map("last_accessed_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  createdById       String?  @map("created_by")
+
+  // Relations
+  device            Device                    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  createdBy         User?                     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  extractedSpecs    DocumentationExtraction[]
+  contentRatings    ContentRating[]
+  contentTags       DocumentationTag[]
+
+  @@index([deviceId])
+  @@index([contentType])
+  @@index([sourceType])
+  @@index([verified])
+  @@index([cacheStatus])
+  @@index([lastAccessedAt])
+  @@index([createdAt])
+  @@map("device_documentation")
+}
+
+// Documentation Extraction - Schema-aware AI extraction results with per-field confidence
+model DocumentationExtraction {
+  id                  String   @id @default(cuid())
+  documentationId     String   @map("documentation_id")
+  deviceId            String   @map("device_id")
+  categoryId          String   @map("category_id")
+  schemaVersion       String   @map("schema_version") @db.VarChar(20)
+  extractedFields     Json     // Field name -> extracted value mapping
+  fieldConfidence     Json     @map("field_confidence") // Field name -> confidence score mapping
+  missingFields       String[] @map("missing_fields") // Fields not found in document
+  validationErrors    Json?    @map("validation_errors") // Field name -> validation error mapping
+  extractionContext   Json?    @map("extraction_context") // Context used for extraction
+  aiModel             String   @map("ai_model") @db.VarChar(100)
+  processingTime      Int      @map("processing_time") // milliseconds
+  reviewStatus        String   @default("pending") @map("review_status") @db.VarChar(20) // pending, approved, rejected, needs_review
+  reviewedAt          DateTime? @map("reviewed_at")
+  reviewedById        String?  @map("reviewed_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  // Relations
+  documentation       DeviceDocumentation @relation(fields: [documentationId], references: [id], onDelete: Cascade)
+  device              Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  category            DeviceCategory      @relation(fields: [categoryId], references: [id])
+  schema              DeviceCategorySchema @relation(fields: [categoryId, schemaVersion], references: [categoryId, version])
+  reviewedBy          User?               @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([documentationId])
+  @@index([deviceId])
+  @@index([categoryId])
+  @@index([reviewStatus])
+  @@index([createdAt])
+  @@map("documentation_extractions")
+}
+
+// Content Rating - User ratings for documentation helpfulness
+model ContentRating {
+  id                String   @id @default(cuid())
+  documentationId   String   @map("documentation_id")
+  userId            String   @map("user_id")
+  rating            String   @db.VarChar(20) // helpful, not_helpful
+  comment           String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations
+  documentation     DeviceDocumentation @relation(fields: [documentationId], references: [id], onDelete: Cascade)
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentationId, userId])
+  @@index([documentationId])
+  @@index([userId])
+  @@map("content_ratings")
+}
+
+// Documentation Tags - Categorization and search optimization
+model DocumentationTag {
+  id                String   @id @default(cuid())
+  documentationId   String   @map("documentation_id")
+  tag               String   @db.VarChar(50)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations
+  documentation     DeviceDocumentation @relation(fields: [documentationId], references: [id], onDelete: Cascade)
+
+  @@unique([documentationId, tag])
+  @@index([tag])
+  @@map("documentation_tags")
+}
+
+// Software Compatibility - Track OS, driver, and software requirements
+model SoftwareCompatibility {
+  id                String   @id @default(cuid())
+  deviceId          String   @map("device_id")
+  softwareType      String   @map("software_type") @db.VarChar(50) // os, driver, firmware, app
+  name              String   @db.VarChar(100)
+  version           String?  @db.VarChar(50)
+  minVersion        String?  @map("min_version") @db.VarChar(50)
+  maxVersion        String?  @map("max_version") @db.VarChar(50)
+  platform          String?  @db.VarChar(50) // windows, macos, linux, android, ios
+  architecture      String?  @db.VarChar(20) // x64, arm64, x86
+  required          Boolean  @default(true)
+  downloadUrl       String?  @map("download_url")
+  notes             String?
+  verified          Boolean  @default(false)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  device            Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([softwareType])
+  @@index([platform])
+  @@map("software_compatibility")
+}
+
+// Content Moderation Queue - Track content requiring moderation
+model ContentModerationQueue {
+  id                String   @id @default(cuid())
+  contentType       String   @map("content_type") @db.VarChar(50) // documentation, review, comment
+  contentId         String   @map("content_id")
+  reason            String   @db.VarChar(100) // spam, inappropriate, copyright, low_quality
+  reportedById      String?  @map("reported_by")
+  status            String   @default("pending") @map("status") @db.VarChar(20) // pending, approved, rejected, removed
+  moderatorNotes    String?  @map("moderator_notes")
+  moderatedAt       DateTime? @map("moderated_at")
+  moderatedById     String?  @map("moderated_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations
+  reportedBy        User?    @relation("ReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
+  moderatedBy       User?    @relation("ModeratedBy", fields: [moderatedById], references: [id], onDelete: SetNull)
+
+  @@index([contentType, contentId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("content_moderation_queue")
 }
