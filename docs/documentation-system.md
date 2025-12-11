@@ -246,7 +246,7 @@ Add software requirement:
 
 ## Usage Examples
 
-### Creating Documentation with AI Extraction
+### Creating Documentation with Data Extraction
 
 ```typescript
 // 1. Upload document to storage

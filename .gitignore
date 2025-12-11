@@ -43,11 +43,6 @@ next-env.d.ts
 # prisma
 /src/generated/prisma
 
-# kiro specs and configuration
-/.kiro/specs/
-/.kiro/settings/
-/.kiro/steering/
-
 # docker volumes
 /docker/postgres/data/
 /docker/redis/data/

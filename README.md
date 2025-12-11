@@ -7,7 +7,7 @@ A universal system for device compatibility and discovery across multiple ecosys
 - **Device Library Management**: Add and manage personal device collections
 - **Standards-Based Compatibility**: Intelligent compatibility analysis using technical standards
 - **Advanced Search**: Search by precise technical constraints and dimensions
-- **AI-Assisted Data Population**: Automated device data extraction from various sources
+- **Automated Data Population**: Device data extraction and integration from various sources
 - **Crowdsourced Verification**: Community-driven data accuracy and verification
 - **Multi-Category Support**: Gaming, PC, appliances, and IoT devices
 
@@ -16,7 +16,7 @@ A universal system for device compatibility and discovery across multiple ecosys
 - **Frontend**: Next.js 14, TypeScript, Tailwind CSS
 - **Backend**: Node.js, Fastify, PostgreSQL, Redis
 - **Database**: Prisma ORM with PostgreSQL
-- **AI Processing**: Python microservice with Ollama/OpenAI
+- **Processing**: Python microservice for data extraction and analysis
 - **Infrastructure**: Docker, Vercel, Railway/Render
 
 ## Getting Started
