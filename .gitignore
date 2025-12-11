@@ -122,3 +122,20 @@ security-audit.log
 
 # Temporary security scan results
 .security/
+
+# Local development and testing files
+# These files can exist locally but won't be committed
+test-*.js
+test-*.bat
+start-*.bat
+*-test.js
+ADMIN_PANEL_TESTING.md
+
+# AI-generated documentation artifacts
+docs/*-completion-summary.md
+docs/*-implementation-summary.md
+docs/task-*.md
+docs/mock-implementations.md
+docs/admin-interface-status.md
+docs/admin-interface-access-guide.md
+docs/admin-optimization-audit.md
