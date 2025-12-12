@@ -1,7 +1,9 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Search, Filter, X, Save, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Device {
@@ -43,9 +45,8 @@ interface Facets {
 
 export default function SearchPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  
-  const [query, setQuery] = useState(searchParams.get('q') || '');
+
+  const [query, setQuery] = useState('');
   const [devices, setDevices] = useState<Device[]>([]);
   const [facets, setFacets] = useState<Facets | null>(null);
   const [loading, setLoading] = useState(false);
@@ -54,25 +55,25 @@ export default function SearchPage() {
   const [hasMore, setHasMore] = useState(false);
   
   // Filter states
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('categoryId') || '');
-  const [selectedBrand, setSelectedBrand] = useState(searchParams.get('brand') || '');
-  const [verifiedOnly, setVerifiedOnly] = useState(searchParams.get('verified') === 'true');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const [specFilters, setSpecFilters] = useState<Record<string, any>>({});
   
   // Dimension filters
-  const [widthMin, setWidthMin] = useState(searchParams.get('widthMin') || '');
-  const [widthMax, setWidthMax] = useState(searchParams.get('widthMax') || '');
-  const [heightMin, setHeightMin] = useState(searchParams.get('heightMin') || '');
-  const [heightMax, setHeightMax] = useState(searchParams.get('heightMax') || '');
-  const [depthMin, setDepthMin] = useState(searchParams.get('depthMin') || '');
-  const [depthMax, setDepthMax] = useState(searchParams.get('depthMax') || '');
+  const [widthMin, setWidthMin] = useState('');
+  const [widthMax, setWidthMax] = useState('');
+  const [heightMin, setHeightMin] = useState('');
+  const [heightMax, setHeightMax] = useState('');
+  const [depthMin, setDepthMin] = useState('');
+  const [depthMax, setDepthMax] = useState('');
   
   // Power and weight filters
-  const [powerMin, setPowerMin] = useState(searchParams.get('powerMin') || '');
-  const [powerMax, setPowerMax] = useState(searchParams.get('powerMax') || '');
-  const [weightMin, setWeightMin] = useState(searchParams.get('weightMin') || '');
-  const [weightMax, setWeightMax] = useState(searchParams.get('weightMax') || '');
+  const [powerMin, setPowerMin] = useState('');
+  const [powerMax, setPowerMax] = useState('');
+  const [weightMin, setWeightMin] = useState('');
+  const [weightMax, setWeightMax] = useState('');
 
   // Build search URL
   const buildSearchUrl = useCallback(() => {
@@ -160,6 +161,26 @@ export default function SearchPage() {
 
     return () => clearTimeout(timeoutId);
   }, [updateUrl]);
+
+  // Initialize state from client-side URL search params (avoid useSearchParams prerender/runtime issues)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sp = new URLSearchParams(window.location.search);
+    setQuery(sp.get('q') || '');
+    setSelectedCategory(sp.get('categoryId') || '');
+    setSelectedBrand(sp.get('brand') || '');
+    setVerifiedOnly(sp.get('verified') === 'true');
+    setWidthMin(sp.get('widthMin') || '');
+    setWidthMax(sp.get('widthMax') || '');
+    setHeightMin(sp.get('heightMin') || '');
+    setHeightMax(sp.get('heightMax') || '');
+    setDepthMin(sp.get('depthMin') || '');
+    setDepthMax(sp.get('depthMax') || '');
+    setPowerMin(sp.get('powerMin') || '');
+    setPowerMax(sp.get('powerMax') || '');
+    setWeightMin(sp.get('weightMin') || '');
+    setWeightMax(sp.get('weightMax') || '');
+  }, []);
 
   // Clear all filters
   const clearFilters = () => {

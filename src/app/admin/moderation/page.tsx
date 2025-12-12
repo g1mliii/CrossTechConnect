@@ -55,7 +55,7 @@ export default function AdminModerationPage() {
     }
   );
 
-  const queue = queueData?.data || [];
+  const queue: ModerationItem[] = queueData?.data || [];
   const totalCount = queueData?.total || 0;
   const stats = statsData?.data || {
     pending: 0,
@@ -166,7 +166,7 @@ export default function AdminModerationPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {queue.map((item) => (
+                {queue.map((item: ModerationItem) => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <div className="font-medium">{item.contentType}</div>

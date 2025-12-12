@@ -51,7 +51,7 @@ export default function AdminExtractionsPage() {
     }
   );
 
-  const extractions = data?.data || [];
+  const extractions: Extraction[] = data?.data || [];
   const totalCount = data?.total || 0;
 
   const reviewExtraction = async (id: string, status: 'approved' | 'rejected' | 'needs_review') => {
@@ -115,7 +115,7 @@ export default function AdminExtractionsPage() {
             No extractions found with status: {statusFilter}
           </div>
         ) : (
-          extractions.map((extraction) => {
+          extractions.map((extraction: Extraction) => {
             const overallConfidence = calculateOverallConfidence(extraction.fieldConfidence);
             const hasErrors = extraction.validationErrors && Object.keys(extraction.validationErrors).length > 0;
 

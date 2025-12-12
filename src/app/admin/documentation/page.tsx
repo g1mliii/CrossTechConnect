@@ -62,7 +62,7 @@ export default function AdminDocumentationPage() {
     }
   );
 
-  const documentation = data?.data || [];
+  const documentation: Documentation[] = data?.data || [];
   const totalCount = data?.total || 0;
 
   const verifyDocumentation = async (id: string) => {
@@ -192,7 +192,7 @@ export default function AdminDocumentationPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {documentation.map((doc) => (
+                {documentation.map((doc: Documentation) => (
                   <tr key={doc.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <div className="font-medium">{doc.title}</div>
