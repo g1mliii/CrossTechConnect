@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cache, createCacheKey } from '@/lib/cache';
+import type { UserActivity, ActivityTypeStats, EntityTypeStats, TimelineStats } from '@/types/database';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,12 +19,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { userId, activityType, entityType, entityId, metadata } = body;
-
-    // Get IP and user agent from headers
-    const ipAddress = request.headers.get('x-forwarded-for') || 
-                     request.headers.get('x-real-ip') || 
-                     'unknown';
-    const userAgent = request.headers.get('user-agent') || 'unknown';
 
     const { data, error } = await supabase
       .from('user_activity')
@@ -120,34 +115,34 @@ export async function GET(request: NextRequest) {
     const uniqueUsers = new Set(data?.map(a => a.user_id).filter(Boolean)).size;
 
     // Group by activity type
-    const activityTypeStats = data?.reduce((acc: any, activity: any) => {
+    const activityTypeStats: ActivityTypeStats = data?.reduce((acc: ActivityTypeStats, activity: UserActivity) => {
       const type = activity.action;
       if (!acc[type]) {
         acc[type] = 0;
       }
       acc[type]++;
       return acc;
-    }, {});
+    }, {} as ActivityTypeStats) || {};
 
     // Group by entity type
-    const entityTypeStats = data?.reduce((acc: any, activity: any) => {
+    const entityTypeStats: EntityTypeStats = data?.reduce((acc: EntityTypeStats, activity: UserActivity) => {
       const type = activity.entity_type || 'none';
       if (!acc[type]) {
         acc[type] = 0;
       }
       acc[type]++;
       return acc;
-    }, {});
+    }, {} as EntityTypeStats) || {};
 
     // Activity timeline (group by day)
-    const timeline = data?.reduce((acc: any, activity: any) => {
+    const timeline: TimelineStats = data?.reduce((acc: TimelineStats, activity: UserActivity) => {
       const date = new Date(activity.timestamp).toISOString().split('T')[0];
       if (!acc[date]) {
         acc[date] = 0;
       }
       acc[date]++;
       return acc;
-    }, {});
+    }, {} as TimelineStats) || {};
 
     const result = {
       totalActivities,

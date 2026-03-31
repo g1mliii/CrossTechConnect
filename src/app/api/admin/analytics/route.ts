@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cache, createCacheKey } from '@/lib/cache';
+import type { SearchTracking, UserActivity } from '@/types/database';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,12 +34,10 @@ export async function GET(request: NextRequest) {
     // Get basic counts (just counts, no data)
     const [
       { count: totalCategories },
-      { count: totalDevices },
-      { count: totalUsers }
+      { count: totalDevices }
     ] = await Promise.all([
       supabase.from('device_categories').select('*', { count: 'exact', head: true }),
-      supabase.from('devices').select('*', { count: 'exact', head: true }),
-      supabase.from('users').select('*', { count: 'exact', head: true })
+      supabase.from('devices').select('*', { count: 'exact', head: true })
     ]);
 
     // Get category stats with aggregated device counts (using a more efficient query)
@@ -63,26 +62,33 @@ export async function GET(request: NextRequest) {
       .gte('timestamp', startDate.toISOString());
 
     // Count searches per category
-    const searchCountByCategory = (searchData || []).reduce((acc: any, search: any) => {
+    interface SearchPartial {
+      category_id: string | null;
+    }
+    const searchCountByCategory = (searchData || []).reduce((acc: Record<string, number>, search: SearchPartial) => {
       const catId = search.category_id;
       if (catId) {
         acc[catId] = (acc[catId] || 0) + 1;
       }
       return acc;
-    }, {});
+    }, {} as Record<string, number>);
 
     // Count unique users per category (from activity data)
-    const usersByCategory = (activityData || []).reduce((acc: any, activity: any) => {
+    interface ActivityPartial {
+      entity_type: string | null;
+      entity_id: string | null;
+    }
+    const usersByCategory = (activityData || []).reduce((acc: Record<string, Set<string>>, activity: ActivityPartial) => {
       if (activity.entity_type === 'device') {
         // We'd need to join with devices to get category, for now use a simplified approach
         const catId = activity.entity_id;
         if (catId) {
           if (!acc[catId]) acc[catId] = new Set();
-          acc[catId].add(activity.entity_id);
+          acc[catId].add(catId);
         }
       }
       return acc;
-    }, {});
+    }, {} as Record<string, Set<string>>);
 
     // Get device counts per category efficiently
     const { data: deviceCounts } = await supabase
@@ -102,9 +108,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Process category stats
-    const processedCategoryStats = (categoryStats || []).map((category: any) => {
-      const deviceCount = deviceCounts 
-        ? (deviceCounts.find((dc: any) => dc.category_id === category.id)?.count || 0)
+    interface CategoryData {
+      id: string;
+      name: string;
+    }
+    interface DeviceCountData {
+      category_id: string;
+      count: number;
+    }
+    const processedCategoryStats = (categoryStats || []).map((category: CategoryData) => {
+      const deviceCount = deviceCounts
+        ? (deviceCounts.find((dc: DeviceCountData) => dc.category_id === category.id)?.count || 0)
         : (categoryDeviceCounts[category.id] || 0);
       
       const searchCount = searchCountByCategory[category.id] || 0;
@@ -149,9 +163,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Populate with search data
-    (searchData || []).forEach((search: any) => {
-      if (search.timestamp) {
-        const date = new Date(search.timestamp).toISOString().split('T')[0];
+    interface SearchWithTimestamp extends SearchPartial {
+      timestamp?: string;
+      created_at?: string;
+    }
+    (searchData || []).forEach((search: SearchWithTimestamp) => {
+      const timestamp = search.timestamp || search.created_at;
+      if (timestamp) {
+        const date = new Date(timestamp).toISOString().split('T')[0];
         const entry = timeSeriesMap.get(date);
         if (entry) {
           entry.searches++;
@@ -160,7 +179,10 @@ export async function GET(request: NextRequest) {
     });
 
     // Populate with activity data
-    (activityData || []).forEach((activity: any) => {
+    interface ActivityWithTimestamp extends ActivityPartial {
+      timestamp?: string;
+    }
+    (activityData || []).forEach((activity: ActivityWithTimestamp) => {
       if (activity.timestamp) {
         const date = new Date(activity.timestamp).toISOString().split('T')[0];
         const entry = timeSeriesMap.get(date);

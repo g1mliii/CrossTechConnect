@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { SessionManager } from '@/lib/redis';
 import { withAuth, AuthenticatedRequest, withErrorHandling } from '@/lib/middleware';
 

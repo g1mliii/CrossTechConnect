@@ -167,7 +167,7 @@ export class PluginManager {
       };
     }
 
-    let result: ProcessingResult = {
+    const result: ProcessingResult = {
       success: true,
       processedValue: value,
       confidence: context.confidence || 1.0
@@ -209,7 +209,7 @@ export class PluginManager {
     const applicableValidators = Array.from(this.validators.values())
       .filter(v => v.supportedTypes.includes(field.type) || v.supportedTypes.includes('*'));
 
-    let result: ValidationResult = {
+    const result: ValidationResult = {
       isValid: true,
       errors: [],
       warnings: [],
@@ -311,7 +311,7 @@ export class PluginManager {
           // Convert common units to standard formats
           const unit = field.constraints.unit.toLowerCase();
           let convertedValue = value;
-          let confidence = 1.0;
+          const confidence = 1.0;
 
           const getStandardUnit = (unit: string): string => {
             const unitMap: Record<string, string> = {

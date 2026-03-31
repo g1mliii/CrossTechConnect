@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cache, createCacheKey } from '@/lib/cache';
+import type { SearchTracking, CategoryStats, QueryStats } from '@/types/database';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -107,28 +108,32 @@ export async function GET(request: NextRequest) {
       : 0;
 
     // Group by category
-    const categoryStats = data?.reduce((acc: any, search: any) => {
+    interface CategoryStatsExtended {
+      count: number;
+      totalResults: number;
+    }
+    const categoryStats = data?.reduce((acc: Record<string, CategoryStatsExtended>, search: SearchTracking) => {
       const catId = search.category_id || 'uncategorized';
       if (!acc[catId]) {
         acc[catId] = { count: 0, totalResults: 0 };
       }
       acc[catId].count++;
-      acc[catId].totalResults += search.result_count || 0;
+      acc[catId].totalResults += search.results_count || 0;
       return acc;
-    }, {});
+    }, {} as Record<string, CategoryStatsExtended>) || {};
 
     // Top queries
-    const queryStats = data?.reduce((acc: any, search: any) => {
+    const queryStats: QueryStats = data?.reduce((acc: QueryStats, search: SearchTracking) => {
       const q = search.query.toLowerCase();
       if (!acc[q]) {
         acc[q] = 0;
       }
       acc[q]++;
       return acc;
-    }, {});
+    }, {} as QueryStats) || {};
 
     const topQueries = Object.entries(queryStats || {})
-      .sort(([, a]: any, [, b]: any) => b - a)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
       .slice(0, 10)
       .map(([query, count]) => ({ query, count }));
 

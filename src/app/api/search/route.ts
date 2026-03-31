@@ -383,16 +383,28 @@ async function buildFacets(categoryId?: string, query?: string) {
         .limit(1000);
       
       if (categoryData) {
-        const categoryCounts = categoryData.reduce((acc: any, item: any) => {
+        interface CategoryItem {
+          category_id: string;
+          device_categories?: { id: string; name: string } | { id: string; name: string }[];
+        }
+        interface CategoryCount {
+          id: string;
+          name: string;
+          count: number;
+        }
+        const categoryCounts = categoryData.reduce((acc: Record<string, CategoryCount>, item: CategoryItem) => {
           const catId = item.category_id;
-          const catName = item.device_categories?.name || 'Unknown';
+          const deviceCats = item.device_categories;
+          const catName = Array.isArray(deviceCats)
+            ? deviceCats[0]?.name || 'Unknown'
+            : deviceCats?.name || 'Unknown';
           if (!acc[catId]) {
             acc[catId] = { id: catId, name: catName, count: 0 };
           }
           acc[catId].count++;
           return acc;
-        }, {});
-        
+        }, {} as Record<string, CategoryCount>);
+
         facets.categories = Object.values(categoryCounts);
       }
 
@@ -409,15 +421,22 @@ async function buildFacets(categoryId?: string, query?: string) {
       const { data: brandData } = await brandQuery;
       
       if (brandData) {
-        const brandCounts = brandData.reduce((acc: any, item: any) => {
+        interface BrandItem {
+          brand: string;
+        }
+        interface BrandCount {
+          name: string;
+          count: number;
+        }
+        const brandCounts = brandData.reduce((acc: Record<string, BrandCount>, item: BrandItem) => {
           const brand = item.brand;
           if (!acc[brand]) {
             acc[brand] = { name: brand, count: 0 };
           }
           acc[brand].count++;
           return acc;
-        }, {});
-        
+        }, {} as Record<string, BrandCount>);
+
         facets.brands = Object.values(brandCounts).slice(0, 20);
       }
     } catch (fallbackError) {

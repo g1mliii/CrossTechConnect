@@ -42,7 +42,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             }
         });
 
-        let exportData: any = {
+        const exportData: any = {
             schema,
             category: category ? {
                 id: category.id,

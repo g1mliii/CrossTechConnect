@@ -2,7 +2,7 @@
  * API endpoint for admin dashboard statistics
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -63,15 +63,31 @@ export async function GET() {
     const recentCategories = recentCategoriesResult.data || [];
 
     // Build recent activity from recent devices and categories
+    interface RecentDevice {
+      id: string;
+      name: string;
+      brand: string;
+      created_at: string;
+      device_categories?: { name: string } | { name: string }[];
+    }
+    interface RecentCategory {
+      id: string;
+      name: string;
+    }
     const recentActivity = [
-      ...recentDevices.map((device: any) => ({
-        id: `device_${device.id}`,
-        type: 'device_added' as const,
-        description: `Device "${device.name}" by ${device.brand} added to ${device.device_categories?.name || 'Unknown Category'}`,
-        timestamp: new Date(device.created_at),
-        user: 'System'
-      })),
-      ...recentCategories.map((category: any) => ({
+      ...recentDevices.map((device: RecentDevice) => {
+        const categoryName = Array.isArray(device.device_categories)
+          ? device.device_categories[0]?.name
+          : device.device_categories?.name;
+        return {
+          id: `device_${device.id}`,
+          type: 'device_added' as const,
+          description: `Device "${device.name}" by ${device.brand} added to ${categoryName || 'Unknown Category'}`,
+          timestamp: new Date(device.created_at),
+          user: 'System'
+        };
+      }),
+      ...recentCategories.map((category: RecentCategory) => ({
         id: `category_${category.id}`,
         type: 'category_created' as const,
         description: `Category "${category.name}" created`,
