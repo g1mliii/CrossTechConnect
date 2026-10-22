@@ -23,7 +23,7 @@ A universal system for device compatibility and discovery across multiple ecosys
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 24 (24.22.1 or later)
 - Docker and Docker Compose
 - PostgreSQL (or use Docker)
 
